@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تقرير المبنى — واترمارك مُحاذى بدقة</title>
+<style>
+  :root{ --border:#9aa7c6; --fg:#111827; --muted:#6b7280; }
+  html,body{height:100%;margin:0;background:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Naskh Arabic","Tahoma",sans-serif;color:var(--fg)}
+  .toolbar{position:sticky;top:0;background:#fff;border-bottom:1px solid #e5e7eb;padding:8px;display:flex;gap:8px;z-index:10}
+  .btn{border:1px solid #e5e7eb;background:#fff;border-radius:10px;padding:8px 12px;cursor:pointer}
+  .btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+
+  /* ورقة A4 مع واترمارك: نزّل المحتوى لأسفل ليمر تحت خط الهيدر */
+  .paper{
+    position:relative;
+    width:210mm;
+    min-height:297mm;              /* طول A4 */
+    margin:16px auto;
+    padding:40mm 12mm 24mm;        /* ← زدت الـ padding-top إلى 40mm */
+    box-sizing:border-box;
+    background:#fff;
+    background-image:url('https://i.ibb.co/W4jvtDdH/img-1759573008406.png');
+    background-repeat:no-repeat;
+    background-position:center top;
+    background-size:cover;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+
+  /* شريط رأس بيانات المبنى */
+  .header-band{width:100%;border-collapse:collapse;margin:6mm 0 8mm}
+  .header-band th,.header-band td{border:2px solid var(--border)}
+  .header-band th{background:#eef2ff;text-align:center;font-weight:700;padding:6px 8px}
+  .header-band td{padding:6px 8px}
+  .header-band .small{background:#f9fafb;font-weight:700;text-align:center}
+
+  /* جداول المحتوى */
+  table{width:100%;border-collapse:collapse}
+  th,td{border:1px solid var(--border);padding:6px 8px}
+  thead th{background:#f3f6ff}
+  tfoot td{font-weight:700}
+  h3{margin:6mm 0 4mm}
+
+  /* فوتر نصي إضافي لضمان الظهور (حتى لو الخلفية لم تمتد في PDF) */
+  .footer-text{
+    position:absolute; left:12mm; right:12mm; bottom:8mm;
+    text-align:center; color:#4b5563; font-size:11px;
+    pointer-events:none;
+  }
+
+  @media print{
+    .toolbar{display:none}
+    .paper{margin:0 auto; padding-top:42mm; padding-bottom:26mm;
+           background-image:url('https://i.ibb.co/W4jvtDdH/img-1759573008406.png')}
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button class="btn" onclick="history.back()">⬅️ رجوع</button>
+  <button class="btn primary" id="btnPdf">تصدير PDF</button>
+</div>
+
+<div class="paper" id="paper">
+  <!-- شريط مثل المرجع -->
+  <table class="header-band">
+    <thead>
+      <tr>
+        <th style="width:20%">الشهر - السنة</th>
+        <th style="width:20%">تقرير شهر</th>
+        <th>الموقع</th>
+        <th style="width:22%">اسم المبنى</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td id="hbPeriod"></td>
+        <td>تقرير شهر</td>
+        <td id="hbLocation"></td>
+        <td id="hbName"></td>
+      </tr>
+      <tr>
+        <td class="small" colspan="4">رقم التواصل: <span id="hbPhoneVal"></span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>الشقق</h3>
+  <table id="tblApt">
+    <thead>
+      <tr>
+        <th style="width:5%">#</th>
+        <th style="width:10%">شقة رقم</th>
+        <th style="width:22%">اسم المستأجر</th>
+        <th style="width:12%">الإيجار</th>
+        <th style="width:18%">رقم الهاتف</th>
+        <th style="width:15%">بداية العقد</th>
+        <th style="width:15%">نهاية العقد</th>
+        <th>ملاحظة</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+    <tfoot>
+      <tr><td colspan="3">المجموع</td><td id="aptTotal">0.00</td><td colspan="4"></td></tr>
+    </tfoot>
+  </table>
+
+  <h3 style="margin-top:18px">المحلات / المعارض</h3>
+  <table id="tblShops">
+    <thead>
+      <tr>
+        <th style="width:5%">#</th>
+        <th style="width:15%">رقم/المحل المعرض</th>
+        <th style="width:22%">المستأجر</th>
+        <th style="width:12%">الإيجار</th>
+        <th style="width:18%">رقم الهاتف</th>
+        <th style="width:15%">بداية العقد</th>
+        <th style="width:15%">نهاية العقد</th>
+        <th>ملاحظة</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+    <tfoot>
+      <tr><td colspan="3">المجموع</td><td id="shopTotal">0.00</td><td colspan="4"></td></tr>
+    </tfoot>
+  </table>
+
+  <!-- فوتر نصي إضافي (اختياري) -->
+  <div class="footer-text" id="footerText"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script>
+function fmt(d){ if(!d) return ''; try{ return new Date(d).toLocaleDateString('ar-OM'); }catch(e){ return d; } }
+let payload=null;
+try{ payload = JSON.parse(localStorage.getItem('pm_report_payload')||'null'); }catch(e){}
+
+if(!payload){
+  document.getElementById('paper').innerHTML = '<div style="padding:24px">لا توجد بيانات تقرير — افتح التقرير من داخل البرنامج.</div>';
+}else{
+  const {buildingName,year,month,apartments=[],shops=[],location='',contact=''} = payload;
+  document.getElementById('hbPeriod').textContent = `${month}-${year}`;
+  document.getElementById('hbLocation').textContent = location || '';
+  document.getElementById('hbName').textContent = buildingName || '';
+  document.getElementById('hbPhoneVal').textContent = contact || '';
+
+  // فوتر نصي يضمن ظهور شيء في الأسفل
+  document.getElementById('footerText').textContent = '';
+
+  // الشقق
+  const tbA=document.querySelector('#tblApt tbody'); let sumA=0;
+  if(apartments.length===0){
+    tbA.innerHTML='<tr><td colspan="8" style="text-align:center;color:#6b7280">لا توجد بيانات</td></tr>';
+  }else{
+    tbA.innerHTML = apartments.map((r,i)=>{ sumA+=Number(r.rent||0); return `<tr>
+      <td>${i+1}</td><td>${r.unitNumber||''}</td><td>${r.tenantName||''}</td>
+      <td>${Number(r.rent||0).toFixed(2)}</td><td>${r.phone||''}</td>
+      <td>${fmt(r.startDate)}</td><td>${fmt(r.endDate)}</td><td>${r.notes||''}</td></tr>`; }).join('');
+  }
+  document.getElementById('aptTotal').textContent = sumA.toFixed(2);
+
+  // المحلات/المعارض
+  const tbS=document.querySelector('#tblShops tbody'); let sumS=0;
+  if(shops.length===0){
+    tbS.innerHTML='<tr><td colspan="8" style="text-align:center;color:#6b7280">لا توجد بيانات</td></tr>';
+  }else{
+    tbS.innerHTML = shops.map((r,i)=>{ sumS+=Number(r.rent||0); return `<tr>
+      <td>${i+1}</td><td>${r.unitNumber||''}</td><td>${r.tenantName||''}</td>
+      <td>${Number(r.rent||0).toFixed(2)}</td><td>${r.phone||''}</td>
+      <td>${fmt(r.startDate)}</td><td>${fmt(r.endDate)}</td><td>${r.notes||''}</td></tr>`; }).join('');
+  }
+  document.getElementById('shopTotal').textContent = sumS.toFixed(2);
+}
+
+document.getElementById('btnPdf').addEventListener('click', ()=>{
+  const opt = {
+    filename: 'building-report.pdf',
+    margin: [0,0,0,0],
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, backgroundColor: null },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+  html2pdf().set(opt).from(document.querySelector('.paper')).save();
+});
+</script>
+</body>
+</html>
