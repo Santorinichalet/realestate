@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -474,12 +475,13 @@ async function renderReport(){
     owner: b.owner || '',
     year: yyyy,
     month: mm,
+    header: { location: b.location || '', contact: b.contact || '' },
     apartments: apartments.map(t=>({unitNumber:t.unitNumber||'', tenantName:t.tenantName||'', rent:+(t.rent||0), startDate:t.startDate, endDate:t.endDate, phone:t.phone||'', nationalId:t.nationalId||'', notes:t.notes||''})),
     shops: shops.map(t=>({unitNumber:t.unitNumber||'', tenantName:t.tenantName||'', rent:+(t.rent||0), startDate:t.startDate, endDate:t.endDate, phone:t.phone||'', nationalId:t.nationalId||'', notes:t.notes||''})),
     expenses: expenses.map(e=>({type:e.type||'', amount:+(e.amount||0), date:e.date||'', notes:e.notes||''}))
   };
   try{ localStorage.setItem('pm_report_payload', JSON.stringify(payload)); }catch(e){ console.warn('localStorage error', e); }
-  const reportURL = new URL('property_report_pro_v32.html', location.href).href;
+  const reportURL = new URL('property_report_integrated_compatible.html', location.href).href;
   try{
     const html = await fetch(reportURL).then(r=>r.text());
     const w = window.open('', '_blank');
