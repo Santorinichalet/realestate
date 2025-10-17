@@ -1,0 +1,2345 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>إدارة الممتلكات — نسخة منظمة (v8) — Fixed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&family=Noto+Naskh+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{ --bg:#f7f9fb; --fg:#0f172a; --muted:#6b7280; --card:#fff; --border:#e5e7eb; --accent:#1f6fff; --accent-2:#1558d6; --success:#16a34a; --danger:#ef4444; --kpi:#f8fafc; }
+html,body{ background:linear-gradient(180deg,#fbfcfe 0%,#f2f5f9 100%); }
+body{ margin:0; direction:rtl; text-align:right; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; font-family:"Tajawal","Noto Naskh Arabic",system-ui,-apple-system,"Segoe UI",Roboto,"Tahoma",sans-serif; color:var(--fg); font-size:15px; line-height:1.6; }
+*,*:before,*:after{ box-sizing:border-box; }
+.container{ max-width:1200px; margin:0 auto; padding:14px; }
+.grid{ display:grid; gap:12px; }
+@media(min-width:960px){ .cols-3{ grid-template-columns:repeat(3,1fr);} }
+@media(min-width:640px){ .cols-2{ grid-template-columns:repeat(2,1fr);} }
+.hidden{ display:none !important; }
+.kv{ display:flex; flex-wrap:wrap; gap:12px; color:#374151; }
+header{ position:sticky; top:0; z-index:50; background:rgba(255,255,255,.85); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); }
+.brand{ display:flex; align-items:center; gap:8px; font-weight:700; }
+.brand img{ height:42px; width:auto; border-radius:6px; object-fit:contain; }
+.toolbar{ display:flex; gap:8px; flex-wrap:wrap; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--border); background:#fff; color:#0f172a; border-radius:10px; padding:10px 14px; cursor:pointer; transition:all .15s; font-size:14px; }
+.btn:hover{ transform:translateY(-1px); box-shadow:0 6px 18px rgba(0,0,0,.06); }
+.btn.primary{ background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 2px 6px rgba(31,111,255,.25); }
+.btn.danger{ background:var(--danger); color:#fff; border-color:var(--danger); box-shadow:0 2px 6px rgba(239,68,68,.25); }
+.card{ background:var(--card); border:1px solid var(--border); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); overflow:hidden; }
+.card-h{ padding:12px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.card-c{ padding:12px 14px; }
+.muted{ color:var(--muted); }
+.stat{ background:var(--kpi); border:1px solid var(--border); border-radius:12px; padding:12px 14px; display:flex; align-items:center; gap:10px; }
+.icon-card{ border:1px solid var(--border); border-radius:16px; padding:16px; background:#fff; transition:transform .12s, box-shadow .18s; }
+.icon-card:hover{ transform:translateY(-2px); box-shadow:0 10px 28px rgba(0,0,0,.07); }
+.circle{ width:54px; height:54px; border-radius:50%; display:grid; place-items:center; background:#e0e7ff; border:1px solid #c7d2fe; font-size:22px; }
+input,select,textarea{ border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:#fff; transition:border-color .15s, box-shadow .15s; }
+input:focus,select:focus,textarea:focus{ outline:none; border-color:#93c5fd; box-shadow:0 0 0 3px rgba(59,130,246,.15); }
+label{ color:#374151; font-size:12px; margin-bottom:6px; display:block; }
+.filters{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.chip{ border:1px solid var(--border); padding:6px 12px; border-radius:999px; cursor:pointer; background:#fff; transition:all .15s; }
+.chip.active{ background:#eef2ff; border-color:#c7d2fe; }
+table{ width:100%; border-collapse:collapse; border:1px solid var(--border); background:#fff; }
+th,td{ border:1px solid var(--border); padding:8px 10px; }
+thead{ background:#f8fafc; }
+.modal-wrap{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-wrap.show{ display:flex; }
+.modal-wrap .backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.25) }
+.modal-wrap .modal{ position:relative; background:#fff; border-radius:18px; border:1px solid var(--border); width:min(820px,94vw); max-height:88vh; overflow:auto; }
+.modal .head{ padding:14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.modal .body{ padding:14px; }
+.modal .buttons-row{ display:flex; align-items:center; gap:8px; justify-content:flex-end; margin-top:10px; }
+@media print{ header,.toolbar,.filters,.modal-wrap{ display:none !important; } }
+.badge{ display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); font-size:12px; }
+.badge.success{ background:#ecfdf5; border-color:#bbf7d0; }
+.badge.gray{ background:#f3f4f6; border-color:#e5e7eb; }
+
+/* === FORCE: 5 action buttons in ONE horizontal row === */
+[data-tenant-row] > div[style*="justify-content:flex-end"]{
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+}
+[data-tenant-row] > div[style*="justify-content:flex-end"] .tenant-actions{
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-wrap: nowrap !important;
+}
+/* Normalize button sizes */
+[data-tenant-row] [data-edit],
+[data-tenant-row] [data-del],
+[data-tenant-row] [data-pay],
+[data-tenant-row] [data-receipt],
+[data-tenant-row] [data-contract]{
+  min-height: 40px !important;
+  padding-inline: 12px !important;
+  white-space: nowrap !important;
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="container" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <div class="brand">
+      <img src="https://i.ibb.co/C3rc2mkL/file-00000000637c62308240e62f076360cc.png" alt="Logo" onerror="this.style.display='none'">
+      <span>إدارة الممتلكات</span>
+    </div>
+    <div class="toolbar">
+      <button type="button" class="btn primary" id="btnAddBuilding">➕ مبنى</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="ymbar" style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+    <div>السنة</div>
+    <select id="yearSel"></select>
+    <div>الشهر</div>
+    <select id="monthSel"></select>
+  </div>
+
+  <section class="grid cols-3" id="kpis">
+    <div class="stat">إجمالي الإيراد (الشهر المحدد): <b id="kpiIncome">0</b> ر.ع</div>
+    <div class="stat">المصروفات (الشهر المحدد): <b id="kpiExpenses">0</b> ر.ع</div>
+    <div class="stat">الصافي: <b id="kpiNet">0</b> ر.ع</div>
+  </section>
+
+  <section id="view-dashboard" style="margin-top:10px">
+    <div id="bizTabs" class="filters" style="margin:8px 0">
+      <div class="chip active" data-biz="إدارة مباني">إدارة المباني</div>
+      <div class="chip" data-biz="جمعية الملاك">جمعية الملاك</div>
+    </div>
+
+    <div class="topbar" style="display:flex;gap:8px;align-items:center;margin:6px 0 2px 0">
+      <input id="bizSearchInput" type="search" placeholder="بحث بالاسم / المالك / الموقع" aria-label="بحث" style="flex:1;min-width:220px" />
+    </div>
+
+    <h2 style="margin:6px 0">المباني</h2>
+    <div id="buildingsGrid" class="grid cols-3" data-buildings-grid></div>
+    <div id="emptyBuildings" class="card" style="display:none">
+      <div class="card-c muted" style="text-align:center;padding:24px">لا يوجد مبانٍ — أضف مبنى من أيقونة (➕ مبنى) بالأعلى.</div>
+    </div>
+  </section>
+
+  <section id="view-building" class="hidden">
+    <div class="card">
+      <div class="card-h">
+        <div>
+          <h2 id="buildingTitle" style="margin:0 0 4px"></h2>
+          <div id="buildingMeta" class="kv" style="font-size:13px"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn" id="btnBack">الرجوع</button>
+          <button type="button" class="btn" id="btnEditBuilding">✏️ تعديل المبنى</button>
+          <button type="button" class="btn" id="btnImportCSV">📥 استيراد مستأجرين (CSV)</button>
+          <button type="button" class="btn primary" id="btnAddTenant">➕ إضافة مستأجر</button>
+          <button type="button" class="btn" id="btnExpenses">💰 المصروفات</button>
+                 <button type="button" class="btn" id="btnFiles">📎 المرفقات</button>
+          <button type="button" class="btn" id="btnReport">📊 تقرير</button>
+        </div>
+      </div>
+
+      <div class="card-c">
+        <div class="grid cols-3" style="margin-bottom:8px">
+          <div class="stat">إيراد المبنى (الشهر): <b id="bkIncome">0</b> ر.ع</div>
+          <div class="stat">مصروفات المبنى (الشهر): <b id="bkExpenses">0</b> ر.ع</div>
+          <div class="stat">الصافي (الشهر): <b id="bkNet">0</b> ر.ع</div>
+        </div>
+
+        <div class="grid cols-3">
+          <div class="stat">إجمالي الوحدات: <b id="stTotal">0</b></div>
+          <div class="stat">شقق: <b id="stApt">0</b></div>
+          <div class="stat">محلات/معارض: <b id="stShop">0</b></div>
+          <div class="stat">مشغولة: <b id="stOcc">0</b></div>
+          <div class="stat">شاغرة: <b id="stVac">0</b></div>
+          <div class="stat">تنتهي قريباً (≤30 يوم): <b id="stExpSoon">0</b></div>
+        </div>
+
+        <div class="filters" style="margin:12px 0">
+          <input id="searchBox" placeholder="بحث بالاسم/الوحدة/الهاتف/البطاقة" style="max-width:260px">
+          <div class="chip" data-ft="all">الكل</div>
+          <div class="chip" data-ft="apartment">شقق</div>
+          <div class="chip" data-ft="shop">محلات</div>
+          <div class="chip" data-ft="showroom">معارض</div>
+          <div class="chip" data-ft="basement">قبو</div>
+          <div class="chip" data-status="occupied">مشغولة</div>
+          <div class="chip" data-status="vacant">شاغرة</div>
+        </div>
+
+        <div class="grid cols-2" style="margin-top:12px">
+          <div class="card">
+            <div class="card-h"><b>قائمة الوحدات</b></div>
+            <div class="card-c" id="unitsList"><span class="muted">—</span></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><b>المستأجرون</b></div>
+            <div class="card-c" id="tenantsList"><span class="muted">—</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modalWrap" class="modal-wrap" aria-hidden="true">
+  <div class="backdrop" data-close></div>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="head">
+      <h3 id="modalTitle">عنوان</h3>
+      <button type="button" class="btn" data-close>✕</button>
+    </div>
+    <div class="body" id="modalBody"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
+<script>
+const App = (()=>{
+  const State = {
+    activeBuildingId: null,
+    selYear: (new Date()).getFullYear(),
+    selMonth: (new Date()).getMonth()+1,
+    chipsState: { kind:'all', status:null },
+    bizTab: 'إدارة مباني',
+    bizSearchQuery: '',
+    cachedBuildings: []
+  };
+
+  const firebaseConfig = {
+    apiKey:"AIzaSyDE5ko6yQW5npxKWn0GUiz2NryqdOJUhOo",
+    authDomain:"realestate-6b48f.firebaseapp.com",
+    projectId:"realestate-6b48f",
+    storageBucket:"realestate-6b48f.appspot.com",
+    messagingSenderId:"807500202227",
+    appId:"1:807500202227:web:8333a119554122a36db786"
+  };
+  try{ firebase.initializeApp(firebaseConfig); }catch(e){}
+  const db = firebase.firestore();
+  const storage = firebase.storage();
+
+  const $  = (s,p=document)=>p.querySelector(s);
+  const $$ = (s,p=document)=>Array.from(p.querySelectorAll(s));
+  const todayIso = ()=> new Date().toISOString().slice(0,10);
+  const fmtDate  = d => d ? (asDate(d, false))?.toLocaleDateString('ar-OM') : '';
+
+  // Robust month helpers
+  const startOfMonth = (y,m)=> new Date(Date.UTC(y, m-1, 1));
+  const endOfMonth   = (y,m)=> new Date(Date.UTC(y, m, 0, 23,59,59));
+  const prevMonthEnd = (y,m)=> (m===1? endOfMonth(y-1,12) : endOfMonth(y, m-1));
+
+// استبدل دالة asDate بالكامل بهذه النسخة
+const asDate = (v, end = false) => {
+  if (!v) return null;
+  try {
+    let d;
+    if (typeof v?.toDate === 'function') d = v.toDate();                // Firestore Timestamp
+    else if (typeof v?.seconds === 'number') d = new Date(v.seconds*1000);
+    else if (v instanceof Date) d = v;
+    else {
+      const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);           // نص YYYY-MM-DD
+      if (!m) return null;
+      return new Date(Date.UTC(+m[1], +m[2]-1, +m[3],
+        end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0));
+    }
+    // مهم: خُذ اليوم/الشهر/السنة بالمحلي، ثم ابنِ تاريخ UTC منّها (بدون انزياح)
+    const y = d.getFullYear(), m = d.getMonth(), day = d.getDate();
+    return new Date(Date.UTC(y, m, day, end ? 23 : 0, end ? 59 : 0, end ? 59 : 0, end ? 999 : 0));
+  } catch { return null; }
+};
+
+// استخدم فحص صلاحية التاريخ بدل الاعتماد على ||
+const isActiveDuring = (s, e, ms, me) => {
+  const sd0 = asDate(s, false), ed0 = asDate(e, true);
+  const sd  = (sd0 instanceof Date && !isNaN(sd0.getTime())) ? sd0 : new Date(0);
+  const ed  = (ed0 instanceof Date && !isNaN(ed0.getTime())) ? ed0 : new Date('9999-12-31T23:59:59.999Z');
+  return sd <= me && ed >= ms;  // شامل لآخر يوم في الشهر
+};
+
+
+
+  const num   = v => Number(v||0);
+  const ymKey = (y,m)=> String(y).padStart(4,'0') + '-' + String(m).padStart(2,'0');
+
+  const monthsSinceStartIncl = (startY, startM, y, m)=> (y*12+m) - (startY*12+startM) + 1;
+
+  const FB = {
+    listBuildings: async()=> (await db.collection('buildings').get()).docs.map(d=>({id:d.id, ...d.data()})),
+    createBuilding: async(data)=> (await db.collection('buildings').add(data)).id,
+    updateBuilding: async(id,patch)=> db.collection('buildings').doc(id).update(patch),
+    removeBuilding: async(id)=> db.collection('buildings').doc(id).delete(),
+    listTenants: async(bid)=> (await db.collection('buildings').doc(bid).collection('tenants').get()).docs.map(d=>({id:d.id, ...d.data()})),
+    addTenant: async(bid,data)=> (await db.collection('buildings').doc(bid).collection('tenants').add(data)).id,
+    updateTenant: async(bid,id,patch)=> db.collection('buildings').doc(bid).collection('tenants').doc(id).update(patch),
+    deleteTenant: async(bid,id)=> db.collection('buildings').doc(bid).collection('tenants').doc(id).delete(),
+    listExpenses: async(bid)=> (await db.collection('buildings').doc(bid).collection('expenses').get()).docs.map(d=>({id:d.id, ...d.data()})),
+    addExpense: async(bid,data)=> (await db.collection('buildings').doc(bid).collection('expenses').add(data)).id,
+    updateExpense: async(bid,id,patch)=> db.collection('buildings').doc(bid).collection('expenses').doc(id).update(patch),
+    deleteExpense: async(bid,id)=> db.collection('buildings').doc(bid).collection('expenses').doc(id).delete(),
+// ========== Attachments (per building) ==========
+listAttachments: async (bid) => {
+  const snap = await db
+    .collection('buildings').doc(bid)
+    .collection('attachments')
+    .orderBy('uploadedAt', 'desc')
+    .get();
+  return snap.docs.map(d => ({ id: d.id, ...(d.data()||{}) }));
+},
+
+addAttachment: async (bid, file, note='') => {
+  const safeName = String(file.name||'file').replace(/\s+/g,'_');
+  const path     = `buildings/${bid}/attachments/${Date.now()}_${safeName}`;
+  const ref      = storage.ref().child(path);
+  await ref.put(file, { contentType: file.type || 'application/octet-stream' });
+  const url = await ref.getDownloadURL();
+
+  const doc = {
+    name: file.name, size: file.size, type: file.type || 'file',
+    path, url, note,
+    uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await db.collection('buildings').doc(bid)
+          .collection('attachments').add(doc);
+},
+
+deleteAttachment: async (bid, docId, path) => {
+  try { await storage.ref().child(path).delete(); } catch(e) { /* ignore */ }
+  await db.collection('buildings').doc(bid)
+          .collection('attachments').doc(docId).delete();
+},
+// ===============================================
+
+  };
+
+  const UI = {
+    openModal(title, html){ $('#modalTitle').textContent = title||''; $('#modalBody').innerHTML = html||''; $('#modalWrap').classList.add('show'); },
+    closeModal(){ $('#modalWrap').classList.remove('show'); $('#modalBody').innerHTML=''; },
+    confirm(msg){ return window.confirm(msg||'هل أنت متأكد؟'); },
+    toast(msg){ alert(msg); }
+  };
+  $('#modalWrap').addEventListener('click', (e)=>{ if(e.target.matches('[data-close]')) UI.closeModal(); });
+
+  // Sorting helpers (fixed Arabic digits regex)
+  const normalizeDigits = (s) => String(s).replace(/[\u0660-\u0669\u06F0-\u06F9]/g, d => {
+    const code = d.charCodeAt(0);
+    const base = (code >= 0x06F0) ? 0x06F0 : 0x0660;
+    return String(code - base);
+  });
+  const naturalKey = (val) => {
+    const s = normalizeDigits(val || '');
+    const parts = s.match(/\d+|\D+/g) || [];
+    return parts.map(p => /^\d+$/.test(p) ? parseInt(p, 10) : p.trim().toLowerCase());
+  };
+  const cmpNatural = (a, b) => {
+    const ka = naturalKey(a), kb = naturalKey(b);
+    const n = Math.max(ka.length, kb.length);
+    for (let i = 0; i < n; i++) {
+      const xa = ka[i], xb = kb[i];
+      if (xa === undefined) return -1;
+      if (xb === undefined) return 1;
+      const na = typeof xa === 'number', nb = typeof xb === 'number';
+      if (na && nb) { if (xa !== xb) return xa - xb; }
+      else { const sa = String(xa), sb = String(xb); if (sa !== sb) return sa.localeCompare(sb, 'ar'); }
+    }
+    return 0;
+  };
+
+  const Render = {
+    populateYM(){
+      const ys = $('#yearSel'), ms = $('#monthSel');
+      ys.innerHTML=''; ms.innerHTML='';
+      for(let y=2018; y<=2036; y++){ const o=document.createElement('option'); o.value=y; o.textContent=y; if(y===State.selYear) o.selected=true; ys.appendChild(o); }
+      const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+      months.forEach((nm,i)=>{ const o=document.createElement('option'); o.value=i+1; o.textContent=nm; if(i+1===State.selMonth) o.selected=true; ms.appendChild(o); });
+      ys.onchange = ()=>{ State.selYear = Number(ys.value); Render.dashboard(); if(State.activeBuildingId) Render.building(); };
+      ms.onchange = ()=>{ State.selMonth= Number(ms.value); Render.dashboard(); if(State.activeBuildingId) Render.building(); };
+    },
+
+    async dashboard(){
+      $('#view-dashboard').classList.remove('hidden');
+      $('#view-building').classList.add('hidden');
+      const grid = $('#buildingsGrid'); grid.innerHTML='';
+
+      const tabs = $('#bizTabs');
+      tabs.onclick = (e)=>{
+        const chip = e.target.closest('.chip[data-biz]'); if(!chip) return;
+        $$('#bizTabs .chip').forEach(c=>c.classList.remove('active'));
+        chip.classList.add('active');
+        State.bizTab = chip.getAttribute('data-biz') || 'إدارة مباني';
+        Render.dashboard();
+      };
+      const inp = $('#bizSearchInput'); let tmo;
+      inp.oninput = ()=>{ clearTimeout(tmo); tmo = setTimeout(()=>{ State.bizSearchQuery = inp.value || ''; Render.dashboard(); }, 150); };
+
+      try{
+        const buildings = await FB.listBuildings();
+        State.cachedBuildings = buildings;
+
+        // Update counts on tabs
+        const cAdmin = buildings.filter(b => (b.bizType || 'إدارة مباني') === 'إدارة مباني').length;
+        const cOwners = buildings.filter(b => (b.bizType || 'إدارة مباني') === 'جمعية الملاك').length;
+        const adminChip = document.querySelector('#bizTabs .chip[data-biz="إدارة مباني"]');
+        const ownersChip = document.querySelector('#bizTabs .chip[data-biz="جمعية الملاك"]');
+        if (adminChip) adminChip.textContent = `إدارة المباني (${cAdmin})`;
+        if (ownersChip) ownersChip.textContent = `جمعية الملاك (${cOwners})`;
+
+        let filtered = buildings.filter(b => (b.bizType || 'إدارة مباني') === State.bizTab);
+        const q = (State.bizSearchQuery||'').trim().toLowerCase();
+        if(q){ filtered = filtered.filter(b => ( ((b.name||'')+' '+(b.owner||'')+' '+(b.location||'')+' '+(b.contact||'')).toLowerCase().includes(q) )); }
+
+        $('#emptyBuildings').style.display = filtered.length ? 'none' : 'block';
+
+        filtered.forEach(b=>{
+          const counts = b.counts || {};
+          const card = document.createElement('div');
+          card.className = 'icon-card';
+          card.innerHTML = `
+            <div class="circle">🏢</div>
+            <div style="font-weight:700">${b.name||''}</div>
+            <div class="muted" style="font-size:12px">${b.owner? '👤 المالك: '+b.owner : ''}</div>
+            <div class="muted" style="font-size:12px">${b.location? '📍 '+b.location : ''}</div>
+            <div class="muted" style="font-size:12px">${b.contact? '☎️ '+b.contact : ''}</div>
+            ${b.notes? `<div class="muted" style="font-size:12px">${b.notes}</div>`:''}
+            <div class="muted" style="font-size:12px">
+              الوحدات: ${(Number(counts.apartments||0)+Number(counts.shops||0)+Number(counts.showrooms||0)+Number(counts.basements||0)) || 0}
+            </div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              <button type="button" class="btn" data-act="open">فتح</button>
+              <button type="button" class="btn" data-act="addTenant">${(b.bizType||'إدارة مباني')==='جمعية الملاك'?'إضافة مالك':'إضافة مستأجر'}</button>
+              <button type="button" class="btn" data-act="edit">✏️ تعديل</button>
+              <button type="button" class="btn danger" data-act="delete">حذف</button>
+            </div>`;
+          card.addEventListener('click', async (e)=>{
+            const btn = e.target.closest('[data-act]'); if(!btn) return;
+            if(btn.dataset.act==='open'){ State.activeBuildingId=b.id; await Render.building(); }
+            else if(btn.dataset.act==='addTenant'){ State.activeBuildingId=b.id; Actions.openAddTenant(); }
+            else if(btn.dataset.act==='edit'){ Actions.openEditBuilding(b); }
+            else if(btn.dataset.act==='delete'){ if(UI.confirm('حذف المبنى؟')){ await FB.removeBuilding(b.id); Render.dashboard(); } }
+          });
+          grid.appendChild(card);
+        });
+
+        // KPIs (global)
+        let income=0, expenses=0;
+        const ms = startOfMonth(State.selYear, State.selMonth);
+        const me = endOfMonth(State.selYear, State.selMonth);
+        for(const b of buildings){
+          const tenants = await FB.listTenants(b.id);
+          const activeTenants = tenants.filter(t=> isActiveDuring(t.startDate, t.endDate, ms, me));
+          // exclude grace-period months from income
+          const incT = activeTenants.filter(t=>{
+            const sd = new Date(t.startDate);
+            const mSince = monthsSinceStartIncl(sd.getUTCFullYear(), sd.getUTCMonth()+1, State.selYear, State.selMonth);
+            return !(t.graceEnabled && Number(t.graceMonths||0) >= mSince);
+          }).reduce((s,t)=> s + num(t.rent), 0);
+          income += incT;
+          const exps = await FB.listExpenses(b.id);
+          expenses += exps.filter(e=> isActiveDuring(e.date, e.date, ms, me)).reduce((s,e)=> s + num(e.amount), 0);
+        }
+        $('#kpiIncome').textContent = income.toFixed(2);
+        $('#kpiExpenses').textContent = expenses.toFixed(2);
+        $('#kpiNet').textContent = (income-expenses).toFixed(2);
+      }catch(err){
+        console.error(err);
+        $('#emptyBuildings').style.display='block';
+        $('#emptyBuildings .card-c').textContent='تعذر تحميل المباني.';
+      }
+    },
+
+    async building(){
+      $('#view-dashboard').classList.add('hidden');
+      $('#view-building').classList.remove('hidden');
+
+      const ref = await firebase.firestore().collection('buildings').doc(State.activeBuildingId).get();
+      const b = { id: ref.id, ...(ref.data()||{}) };
+
+      const isOA = (b.bizType === 'جمعية الملاك');
+      const tSing = isOA ? 'مالك' : 'مستأجر';
+      const tPlural = isOA ? 'الملاك' : 'المستأجرون';
+      const tImport = isOA ? '📥 استيراد ملاك (CSV)' : '📥 استيراد مستأجرين (CSV)';
+      const addBtn = document.getElementById('btnAddTenant'); if (addBtn) addBtn.textContent = '➕ إضافة ' + tSing;
+      const impBtn = document.getElementById('btnImportCSV'); if (impBtn) impBtn.textContent = tImport;
+      const tenantsHeaderEl = document.querySelector('#view-building .grid.cols-2 .card:nth-child(2) .card-h b');
+      if (tenantsHeaderEl) tenantsHeaderEl.textContent = tPlural;
+
+      $('#buildingTitle').textContent = b.name || '';
+      $('#buildingMeta').innerHTML = [
+        b.owner? `👤 <span>${b.owner}</span>` : '',
+        b.location? `📍 <span>${b.location}</span>` : '',
+        b.contact? `☎️ <span>${b.contact}</span>` : '',
+        b.notes? `📝 <span>${b.notes}</span>` : '',
+        b.electricAccount? `⚡ <span>${b.electricAccount}</span>` : '',
+        b.internetNumber? `🌐 <span>${b.internetNumber}</span>` : '',
+        b.guardPhone? `👮 <span>${b.guardPhone}</span>` : '',
+        b.sewageTruckPhone? `🚛 <span>${b.sewageTruckPhone}</span>` : '',
+      ].filter(Boolean).map(x=>`<div>${x}</div>`).join('');
+
+      const ms = startOfMonth(State.selYear, State.selMonth);
+      const me = endOfMonth(State.selYear, State.selMonth);
+      const tenantsAll = await FB.listTenants(b.id);
+      let tenants = tenantsAll.filter(t=> isActiveDuring(t.startDate, t.endDate, ms, me));
+      const expensesAll = await FB.listExpenses(b.id);
+      const expenses = expensesAll.filter(e=> isActiveDuring(e.date, e.date, ms, me));
+
+      // compute total units and stats
+      const counts = b.counts || {};
+      const totalUnits = (counts.apartments||0) + (counts.shops||0) + (counts.showrooms||0) + (counts.basements||0);
+
+      // Sorting for tenants
+      function normalizeDigits2(s) {
+        return String(s||'').replace(/[\u0660-\u0669\u06F0-\u06F9]/g, d => {
+          const code = d.charCodeAt(0);
+          const base = (code >= 0x06F0) ? 0x06F0 : 0x0660;
+          return String(code - base);
+        });
+      }
+      function naturalKey2(val){
+        const s = normalizeDigits2(val||'');
+        const parts = s.match(/\d+|\D+/g) || [];
+        return parts.map(p => /^\d+$/.test(p) ? parseInt(p,10) : p.trim().toLowerCase());
+      }
+      function cmpNatural2(a,b){
+        const ka = naturalKey2(a), kb = naturalKey2(b);
+        const n = Math.max(ka.length, kb.length);
+        for(let i=0;i<n;i++){
+          const xa = ka[i], xb = kb[i];
+          if(xa===undefined) return -1;
+          if(xb===undefined) return 1;
+          const na = typeof xa==='number', nb = typeof xb==='number';
+          if(na && nb){ if(xa!==xb) return xa-xb; }
+          else { const sa=String(xa), sb=String(xb); if(sa!==sb) return sa.localeCompare(sb,'ar'); }
+        }
+        return 0;
+      }
+      function normKind(k){
+        const s = String(k||'').toLowerCase();
+        if (/شقة|apartment/.test(s)) return 'apartment';
+        if (/محل|shop/.test(s))     return 'shop';
+        if (/معرض|showroom/.test(s))return 'showroom';
+        if (/قبو|قب|basement/.test(s)) return 'basement';
+        return 'apartment';
+      }
+      function unitCore(u){
+        return String(u||'').replace(/^\s*(شقة|محل|معرض|قبو)\s*/i,'');
+      }
+
+      tenants.sort((a,b)=>{
+        const order = {apartment:1, shop:2, showroom:3, basement:4};
+        const ka = order[normKind(a && a.kind)] || 99;
+        const kb = order[normKind(b && b.kind)] || 99;
+        if (ka !== kb) return ka - kb;
+        const c  = cmpNatural2(unitCore(a && a.unitNumber), unitCore(b && b.unitNumber));
+        if (c) return c;
+        const ta = (a && a.tenantName || '').toString().trim();
+        const tb = (b && b.tenantName || '').toString().trim();
+        return ta.localeCompare(tb, 'ar', {sensitivity:'base', numeric:true});
+      });
+          // === تحديث مؤشرات المبنى لهذا الشهر ===
+
+// الدخل: مجموع إيجارات المستأجرين النشِطين مع استبعاد أشهر السماح
+const incomeThisMonth = tenants.reduce((sum, t) => {
+  const sd = t.startDate ? new Date(t.startDate) : null;
+  const mSince = sd ? monthsSinceStartIncl(sd.getUTCFullYear(), sd.getUTCMonth()+1, State.selYear, State.selMonth) : 0;
+  const inGrace = t.graceEnabled && Number(t.graceMonths||0) >= mSince;
+  return sum + (inGrace ? 0 : num(t.rent));
+}, 0);
+
+// المصروفات: مجاميع مصروفات هذا الشهر (مصفوفة expenses لديك مُرشّحة مسبقًا)
+const expensesThisMonth = expenses.reduce((s, e) => s + num(e.amount), 0);
+
+// كتابة القيم في الكروت العلوية
+$('#bkIncome').textContent  = incomeThisMonth.toFixed(2);
+$('#bkExpenses').textContent = expensesThisMonth.toFixed(2);
+$('#bkNet').textContent     = (incomeThisMonth - expensesThisMonth).toFixed(2);
+
+// إحصاءات الوحدات
+$('#stTotal').textContent = totalUnits;
+$('#stApt').textContent   = Number(counts.apartments||0);
+$('#stShop').textContent  = Number(counts.shops||0) + Number(counts.showrooms||0);
+$('#stOcc').textContent   = tenants.length;
+$('#stVac').textContent   = Math.max(0, totalUnits - tenants.length);
+
+// تنتهي قريبًا (≤ 30 يومًا من اليوم)
+const now = new Date();
+const soonLimit = new Date(now.getTime() + 30*24*60*60*1000);
+const expSoon = tenants.filter(t => {
+  const ed = asDate(t.endDate, true);
+  return ed && ed >= now && ed <= soonLimit;
+}).length;
+$('#stExpSoon').textContent = expSoon;
+
+const searchBoxEl = document.getElementById('searchBox');
+if (searchBoxEl) searchBoxEl.oninput = () => renderLists();
+
+function applyFilters(base){
+  const q = (searchBoxEl?.value || '').trim().toLowerCase();
+        return base.filter(t=>{
+          if(State.chipsState.kind!=='all'){
+            if(State.chipsState.kind==='shop'){
+              if(!(t.kind==='shop' || t.kind==='showroom')) return false;
+            } else if(t.kind!==State.chipsState.kind){ return false; }
+          }
+          const bag = `${t.unitNumber||''} ${t.tenantName||''} ${t.phone||''} ${t.nationalId||''}`.toLowerCase();
+          return !q || bag.includes(q);
+        });
+      }
+
+      function labelKind(kind){ return kind==='apartment'?'شقة':(kind==='shop'?'محل':(kind==='showroom'?'معرض':'قبو')); }
+
+      function renderLists(){
+        const filtered = applyFilters(tenants);
+        const tenantsBox = $('#tenantsList'); tenantsBox.innerHTML='';
+        if(!filtered.length){ tenantsBox.innerHTML='<div class="muted">'+(isOA?'لا يوجد ملاك حسب التصفية.':'لا يوجد مستأجرون حسب التصفية.')+'</div>'; }
+        filtered.forEach(t=>{
+          const row = document.createElement('div');
+          row.style.cssText='border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;background:#ecfdf5';
+          const natPart = t.nationalId ? (' • البطاقة: '+t.nationalId) : '';
+          const ym = ymKey(State.selYear, State.selMonth);
+          const paidMark = (t.payments && t.payments[ym]) ? '<span style="color:#22bb33;font-weight:bold;font-size:16px">✔️</span>' : '';
+          const payNote = (t.payments && t.payments[ym]) ? `<div class="muted" style="font-size:12px;margin-top:4px;color:#1558d6">💬 ملاحظة الدفع: ${t.payments[ym]}</div>` : '';
+
+          const ptLabel = t.paymentType==='delayed' ? 'مؤخراً' : 'مقدماً';
+          const graceLabel = (t.graceEnabled && Number(t.graceMonths||0)>0) ? ` • فترة سماح: ${Number(t.graceMonths)} شهر` : '';
+
+          row.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <div>
+                <div style="font-weight:600"><span data-tenant-name>${t.tenantName}</span> ${paidMark} <span class="muted">(<span data-unit>${t.unitNumber||'—'}</span>)</span> <span class="badge success">مشغولة</span></div>
+                <div class="muted" style="font-size:12px">${labelKind(t.kind)} • الإيجار: <span data-rent>${t.rent}</span> ر.ع • الدفع: ${ptLabel}${graceLabel} • هاتف: <span data-phone>${t.phone||'—'}</span>${natPart?`<span data-id>${natPart}</span>`:''}</div>
+                <div class="muted" style="font-size:12px">من <span data-start>${fmtDate(t.startDate)}</span> إلى <span data-end>${fmtDate(t.endDate)}</span></div>
+              </div>
+              <div style="display:flex;gap:6px;justify-content:flex-end;align-items:flex-start">
+                <div class="tenant-actions" style="display:flex;flex-direction:row;gap:6px;align-items:center;flex-wrap:nowrap">
+                  <button type="button" class="btn primary" data-edit>✏️ تعديل</button>
+                  <button type="button" class="btn" data-pay>💳 دفع</button>
+                  <button type="button" class="btn" data-receipt
+                          data-tenant-name="${t.tenantName||t.name||''}"
+                          data-unit="${t.unitNumber||t.unit||''}"
+                          data-rent="${t.rent||t.amount||0}"
+                          data-kind="${t.kind||''}"
+                          data-phone="${t.phone||''}"
+                          data-id="${t.nationalId||t.id||''}"
+                          data-paydate="${t.payDate||''}">🧾 إصدار إيصال</button>
+                  <button type="button" class="btn" data-contract
+                          data-tenant-name="${t.tenantName||t.name||''}"
+                          data-unit="${t.unitNumber||t.unit||''}"
+                          data-rent="${t.rent||t.amount||0}"
+                          data-kind="${t.kind||''}"
+                          data-phone="${t.phone||''}"
+                          data-id="${t.nationalId||t.id||''}"
+                          data-paydate="${t.payDate||''}">📃 إصدار عقد</button>
+                </div>
+                <button type="button" class="btn danger" data-del>🗑️ حذف</button>
+              </div>
+            </div>
+            ${payNote}
+            ${t.notes? `<div class="muted" style="font-size:12px;margin-top:4px">ملاحظات: ${t.notes}</div>`:''}
+          `;
+          // dataset for report
+          row.setAttribute('data-tenant-row','');
+          row.dataset.unit       = t.unitNumber || '';
+          row.dataset.tenantName = t.tenantName || '';
+          row.dataset.id         = t.nationalId || '';
+          row.dataset.rent       = t.rent || '';
+          row.dataset.phone      = t.phone || '';
+          row.dataset.start      = t.startDate || '';
+          row.dataset.end        = t.endDate || '';
+          row.dataset.notes      = (t.payments && t.payments[ym]) ? t.payments[ym] : (t.notes || '');
+          row.dataset.kind       = t.kind || '';
+
+          // delete
+          row.querySelector('[data-del]').onclick = async (ev)=>{
+  ev.stopPropagation();
+  if(!UI.confirm('هل أنت متأكد من حذف هذا ' + (isOA?'المالك':'المستأجر') + '؟')) return;
+
+  const mStart = startOfMonth(State.selYear, State.selMonth);
+  const pEnd   = prevMonthEnd(State.selYear, State.selMonth);
+
+  if ((asDate(t.startDate) || new Date(0)) < mStart) {
+    // كان نشِطًا قبل بداية هذا الشهر ⇒ نقفله بنهاية الشهر السابق
+    await FB.updateTenant(b.id, t.id, { endDate: pEnd.toISOString().slice(0,10) });
+  } else {
+    // بدأ هذا الشهر أو بعده ⇒ نحذفه تمامًا
+    await FB.deleteTenant(b.id, t.id);
+  }
+  Render.building();
+};
+
+
+          // pay
+          row.querySelector('[data-pay]').onclick = async (ev)=>{
+            ev.stopPropagation();
+            const ym = ymKey(State.selYear, State.selMonth);
+            UI.openModal('تسجيل دفع', `
+              <div class="row">
+                <div style="grid-column:1/-1">
+                  <label>ملاحظة/قيمة الدفع (${ym})</label>
+                  <textarea id="payNote" rows="3" placeholder="مثال: 280 مقدّم أو 200 مؤخر"></textarea>
+                </div>
+              </div>
+              <div class="buttons-row">
+                <button type="button" class="btn primary" id="savePay">حفظ</button>
+              </div>
+            `);
+            try{
+              const tdoc = await firebase.firestore().collection('buildings').doc(b.id).collection('tenants').doc(t.id).get();
+              const tdata = tdoc.exists ? tdoc.data() : {};
+              const prev = tdata && tdata.payments && tdata.payments[ym];
+              if(prev) document.getElementById('payNote').value = prev;
+            }catch(e){}
+            document.getElementById('savePay').onclick = async ()=>{
+              const note = (document.getElementById('payNote').value||'').trim();
+              const field = {}; field['payments.'+ym] = note || null;
+              await FB.updateTenant(b.id, t.id, field);
+              UI.closeModal();
+              Render.building();
+            };
+          };
+
+          // edit
+          row.querySelector('[data-edit]').onclick = (ev)=>{
+            ev.stopPropagation();
+            UI.openModal('تعديل ' + (isOA?'المالك':'المستأجر') + ' (ساري من هذا الشهر)', `
+              <div class="grid cols-2">
+                <div>
+                  <label>نوع الوحدة</label>
+                  <select id="etKind">
+                    <option value="apartment" ${t.kind==='apartment'?'selected':''}>شقة</option>
+                    <option value="shop" ${t.kind==='shop'?'selected':''}>محل</option>
+                    <option value="showroom" ${t.kind==='showroom'?'selected':''}>معرض</option>
+                    <option value="basement" ${t.kind==='basement'?'selected':''}>قبو</option>
+                  </select>
+                </div>
+                <div><label>رقم الشقة/المحل</label><input id="etUnit" value="${t.unitNumber||''}"></div>
+                <div><label>${isOA?'اسم المالك':'اسم المستأجر'}</label><input id="etName" value="${t.tenantName||''}"></div>
+                <div><label>الإيجار الشهري (ر.ع)</label><input id="etRent" type="number" step="0.001" value="${t.rent||0}"></div>
+                <div><label>الهاتف</label><input id="etPhone" type="tel" value="${t.phone||''}"></div>
+                <div><label>البطاقة الشخصية</label><input id="etNatId" value="${t.nationalId||''}" placeholder="رقم البطاقة"></div>
+                <div><label>تاريخ الانتهاء</label><input id="etEnd" type="date" value="${t.endDate||''}"></div>
+                <div>
+                  <label>تاريخ الدفع</label>
+                  <select id="etPaymentType">
+                    <option value="advance" ${t.paymentType!=='delayed'?'selected':''}>مقدماً</option>
+                    <option value="delayed" ${t.paymentType==='delayed'?'selected':''}>مؤخراً</option>
+                  </select>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <label style="margin:0">فترة سماح؟</label>
+                  <input id="etGraceEnabled" type="checkbox" ${t.graceEnabled?'checked':''} />
+                </div>
+                <div><label>مدة السماح (أشهر)</label><input id="etGraceMonths" type="number" min="0" step="1" value="${Number(t.graceMonths||0)}"></div>
+                <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="etNotes" rows="3">${t.notes||''}</textarea></div>
+              </div>
+              <div class="buttons-row">
+                <button type="button" class="btn primary" id="etSave">حفظ</button>
+              </div>
+            `);
+            document.getElementById('etSave').onclick = async ()=>{
+              const patch = {
+                kind: document.getElementById('etKind').value,
+                unitNumber: document.getElementById('etUnit').value.trim(),
+                tenantName: document.getElementById('etName').value.trim(),
+                rent: Number(document.getElementById('etRent').value||0),
+                phone: document.getElementById('etPhone').value.trim(),
+                nationalId: document.getElementById('etNatId').value.trim(),
+                notes: document.getElementById('etNotes').value.trim(),
+                endDate: document.getElementById('etEnd').value,
+                paymentType: document.getElementById('etPaymentType').value,
+                graceEnabled: document.getElementById('etGraceEnabled').checked,
+                graceMonths: Number(document.getElementById('etGraceMonths').value||0)
+              };
+              if(new Date(t.startDate) < startOfMonth(State.selYear, State.selMonth)){
+                await FB.updateTenant(b.id, t.id, { endDate: prevMonthEnd(State.selYear, State.selMonth).toISOString().slice(0,10) });
+                await FB.addTenant(b.id, { ...patch, startDate: startOfMonth(State.selYear, State.selMonth).toISOString().slice(0,10) });
+              }else{
+                await FB.updateTenant(b.id, t.id, { ...patch });
+              }
+              UI.closeModal();
+              Render.building();
+            };
+          };
+
+          document.getElementById('tenantsList').appendChild(row);
+        });
+
+        // Units list
+        const unitsBox = $('#unitsList'); unitsBox.innerHTML='';
+        const filteredUnits = applyFilters(tenants);
+        filteredUnits.forEach(t=>{
+          const li = document.createElement('div');
+          li.style.cssText='display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);border-radius:10px;padding:8px;margin-bottom:8px';
+          li.innerHTML = `<div>الوحدة <b>${t.unitNumber||'—'}</b> — ${labelKind(t.kind)}</div><div><span class="badge success">مشغولة</span></div>`;
+          unitsBox.appendChild(li);
+        });
+        const vacant = Math.max(0, (Number(totalUnits)||0) - tenants.length);
+        const liVac = document.createElement('div');
+        liVac.style.cssText='display:flex;justify-content:space-between;align-items:center;border:1px dashed var(--border);border-radius:10px;padding:8px;margin-bottom:8px;background:#fff';
+        liVac.innerHTML = `<div>وحدات شاغرة</div><div><span class="badge gray">${vacant}</span></div>`;
+        unitsBox.appendChild(liVac);
+      }
+      renderLists();
+
+      document.getElementById('btnBack').onclick = ()=> Render.dashboard();
+      document.getElementById('btnEditBuilding').onclick = ()=> Actions.openEditBuilding(b);
+      document.getElementById('btnAddTenant').onclick = ()=> Actions.openAddTenant();
+      document.getElementById('btnExpenses').onclick = ()=> Actions.openExpenses();
+      document.getElementById('btnFiles').onclick = App.Actions.openAttachments;
+
+
+      const reportBtn = document.getElementById('btnReport');
+      if (reportBtn) {
+        reportBtn.onclick = null;
+        reportBtn.removeAttribute('data-report');
+        reportBtn.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation?.();
+          try {
+            openBuildingReport({
+  name:     b.name || '',
+  location: b.location || '',
+  phone:    b.contact || '',
+  owner:    b.owner || '',
+  workType: b.bizType || '',
+  feeType:  b.feeType || 'percentage',              // نسبة أو راتب
+  feeValue: (b.feeValue != null ? b.feeValue : ''), // القيمة المُدخلة للمبنى
+});
+
+          } catch (e) {
+            console.error('openBuildingReport غير معرّفة؟', e);
+            alert('لم يتم تحميل دالة التقرير. تأكد أن كتلة "تقرير المبنى" موجودة في الملف.');
+          }
+        });
+      }
+      document.getElementById('btnImportCSV').onclick = ()=> Actions.openImportCSV();
+    },
+  };
+
+  function labelKind(kind){ return kind==='apartment'?'شقة':(kind==='shop'?'محل':(kind==='showroom'?'معرض':'قبو')); }
+
+  const Actions = {
+    openAddBuilding(){ openUpsertBuildingModal('add'); },
+    openEditBuilding(existing){ openUpsertBuildingModal('edit', existing); },
+async openAddTenant(){
+  const bDoc = await firebase.firestore().collection('buildings').doc(State.activeBuildingId).get();
+  const isOA2 = (bDoc.data()||{}).bizType === 'جمعية الملاك';
+
+  // بداية الشهر المحدد في الواجهة (افتراضي لتاريخ التسجيل)
+  const startIso = startOfMonth(State.selYear, State.selMonth).toISOString().slice(0,10);
+
+  UI.openModal('إضافة ' + (isOA2?'مالك':'مستأجر'), `
+    <div class="grid cols-2">
+      <div>
+        <label>نوع الوحدة</label>
+        <select id="tKind">
+          <option value="apartment">شقة</option>
+          <option value="shop">محل</option>
+          <option value="showroom">معرض</option>
+          <option value="basement">قبو</option>
+        </select>
+      </div>
+      <div><label>رقم الشقة/المحل</label><input id="tUnit" placeholder="مثال: 203"></div>
+      <div><label>${isOA2?'اسم المالك':'اسم المستأجر'}</label><input id="tName" placeholder="مثال: علي السعدي"></div>
+      <div><label>الإيجار الشهري (ر.ع)</label><input id="tRent" type="number" step="0.001" placeholder="مثال: 180"></div>
+      <div><label>الهاتف</label><input id="tPhone" type="tel" placeholder="9xxxxxxx"></div>
+      <div><label>البطاقة الشخصية</label><input id="tNatId" inputmode="numeric" placeholder="رقم البطاقة"></div>
+
+      <div><label>تاريخ التسجيل</label><input id="tStart" type="date" value="${startIso}"></div>
+      <div>
+        <label>مدة العقد (أشهر)</label>
+        <input id="tDuration" type="number" min="1" step="1" value="12">
+      </div>
+      <div><label>تاريخ الانتهاء</label><input id="tEnd" type="date" value=""></div>
+
+      <div>
+        <label>تاريخ الدفع</label>
+        <select id="tPaymentType">
+          <option value="advance">مقدماً</option>
+          <option value="delayed">مؤخراً</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="margin:0">فترة سماح؟</label>
+        <input id="tGraceEnabled" type="checkbox" />
+      </div>
+      <div>
+        <label>مدة السماح (أشهر)</label>
+        <input id="tGraceMonths" type="number" min="0" step="1" value="0">
+      </div>
+      <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="tNotes" rows="3" placeholder="تفاصيل إضافية"></textarea></div>
+    </div>
+    <div class="buttons-row">
+      <button type="button" class="btn primary" id="tSave">حفظ</button>
+    </div>
+  `);
+
+  // --- حساب تاريخ الانتهاء تلقائيًا (آخر يوم من آخر شهر) ---
+  const startEl = document.getElementById('tStart');
+  const durEl   = document.getElementById('tDuration');
+  const endEl   = document.getElementById('tEnd');
+
+  function recalcEnd(){
+    const dur = Math.max(1, parseInt(durEl.value || '12', 10));
+    const sd  = new Date(startEl.value || startIso);
+    const y   = sd.getUTCFullYear();
+    const m   = sd.getUTCMonth() + 1;
+
+    // الشهر الأخير شامل (dur-1 أشهر بعد شهر البداية)
+    const total = (y * 12 + (m - 1)) + (dur - 1);
+    const y2 = Math.floor(total / 12);
+    const m2 = (total % 12) + 1;
+
+    endEl.value = endOfMonth(y2, m2).toISOString().slice(0,10);
+  }
+  startEl.addEventListener('change', recalcEnd);
+  durEl.addEventListener('input', recalcEnd);
+  recalcEnd();
+  // ------------------------------------------------------------
+
+  document.getElementById('tSave').onclick = async ()=>{
+    const payload = {
+      kind: document.getElementById('tKind').value,
+      unitNumber: document.getElementById('tUnit').value.trim(),
+      tenantName: document.getElementById('tName').value.trim(),
+      rent: Number(document.getElementById('tRent').value||0),
+      phone: document.getElementById('tPhone').value.trim(),
+      nationalId: document.getElementById('tNatId').value.trim(),
+      startDate: startEl.value || startIso,
+      endDate: (endEl.value||'').trim(), // يجب أن يكون آخر يوم من آخر شهر
+      paymentType: document.getElementById('tPaymentType').value,
+      graceEnabled: document.getElementById('tGraceEnabled').checked,
+      graceMonths: Number(document.getElementById('tGraceMonths').value||0),
+      notes: document.getElementById('tNotes').value.trim(),
+      payments: {} // ملاحظات الدفع شهرية، ولا تُنقل تلقائيًا
+    };
+
+    if(!payload.tenantName){ UI.toast(isOA2?'أدخل اسم المالك':'أدخل اسم المستأجر'); return; }
+    if(payload.endDate && new Date(payload.endDate) < new Date(payload.startDate)){
+      UI.toast('تاريخ الانتهاء لا يجوز أن يسبق تاريخ البداية'); return;
+    }
+
+    await FB.addTenant(State.activeBuildingId, payload);
+    UI.closeModal();
+    App.Render.building();
+  };
+
+
+
+    },
+    async openExpenses(){
+      const bid = State.activeBuildingId;
+      const draw = async ()=>{
+        const exps = await FB.listExpenses(bid);
+        UI.openModal('المصروفات', `
+          <div class="grid cols-2">
+            <div><label>نوع المصروف</label><input id="exType"></div>
+            <div><label>المبلغ (ر.ع)</label><input id="exAmount" type="number" step="0.001"></div>
+            <div><label>التاريخ</label><input id="exDate" type="date" value="${todayIso()}"></div>
+            <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="exNotes" rows="2"></textarea></div>
+          </div>
+          <div class="buttons-row">
+            <button type="button" class="btn primary" id="exAdd">إضافة</button>
+          </div>
+          <div style="margin-top:12px">
+            <table>
+              <thead><tr><th>النوع</th><th>المبلغ</th><th>التاريخ</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
+              <tbody id="exRows">
+                ${exps.map(e=>`
+                  <tr data-id="${e.id}">
+                    <td>${e.type||''}</td>
+                    <td>${Number(e.amount||0).toFixed(3)}</td>
+                    <td>${e.date||''}</td>
+                    <td>${e.notes||''}</td>
+                    <td style="white-space:nowrap">
+                      <button class="btn" data-edit>تعديل</button>
+                      <button class="btn danger" data-del>حذف</button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `);
+        document.getElementById('exAdd').onclick = async ()=>{
+          const payload = {
+            type: document.getElementById('exType').value.trim(),
+            amount: Number(document.getElementById('exAmount').value||0),
+            date: document.getElementById('exDate').value,
+            notes: document.getElementById('exNotes').value.trim()
+          };
+          if(!payload.type){ UI.toast('اكتب نوع المصروف'); return; }
+          await FB.addExpense(bid, payload);
+          draw();
+        };
+        document.getElementById('exRows').onclick = async (e)=>{
+          const row = e.target.closest('tr[data-id]'); if(!row) return;
+          const id = row.getAttribute('data-id');
+          if(e.target.matches('[data-del]')){
+            if(UI.confirm('حذف المصروف؟')){ await FB.deleteExpense(bid, id); draw(); }
+          }else if(e.target.matches('[data-edit]')){
+            const doc = await firebase.firestore().collection('buildings').doc(bid).collection('expenses').doc(id).get();
+            const ex = {id: doc.id, ...(doc.data()||{})};
+            UI.openModal('تعديل مصروف', `
+              <div class="grid cols-2">
+                <div><label>نوع المصروف</label><input id="edType" value="${ex.type||''}"></div>
+                <div><label>المبلغ (ر.ع)</label><input id="edAmount" type="number" step="0.001" value="${Number(ex.amount||0)}"></div>
+                <div><label>التاريخ</label><input id="edDate" type="date" value="${(ex.date||'').slice(0,10)}"></div>
+                <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="edNotes" rows="2">${ex.notes||''}</textarea></div>
+              </div>
+              <div class="buttons-row">
+                <button type="button" class="btn primary" id="edSave">حفظ</button>
+              </div>
+            `);
+            document.getElementById('edSave').onclick = async ()=>{
+              const patch = {
+                type: document.getElementById('edType').value.trim(),
+                amount: Number(document.getElementById('edAmount').value||0),
+                date: document.getElementById('edDate').value,
+                notes: document.getElementById('edNotes').value.trim()
+              };
+              await FB.updateExpense(bid, id, patch);
+              Actions.openExpenses();
+            };
+          }
+        };
+      };
+      await draw();
+    },
+openAttachments: async () => {
+  const bid = State.activeBuildingId;
+  if (!bid) return;
+
+  UI.openModal('📎 مرفقات المبنى', `
+    <div class="grid cols-2" style="align-items:end">
+      <div style="grid-column:1/-1">
+        <label>رفع ملفات</label>
+        <input type="file" id="attUpload" multiple>
+        <small style="color:#6b7280">اختر ملفًا وسيتم رفعه مباشرة (PDF, صور, ...)</small>
+      </div>
+    </div>
+    <div id="attMsg" class="muted" style="margin-top:8px"></div>
+    <div class="table-wrap" style="margin-top:10px">
+      <table class="table">
+        <thead>
+          <tr><th>الاسم</th><th>الحجم</th><th>التاريخ</th><th>إجراءات</th></tr>
+        </thead>
+        <tbody id="attRows">
+          <tr><td colspan="4" style="text-align:center;color:#666">جارٍ التحميل…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  const fmtSize = (n)=> {
+    if (!n && n !== 0) return '';
+    const k = 1024, mb = k*k;
+    return n >= mb ? (n/mb).toFixed(2)+' MB' : (n/k).toFixed(0)+' KB';
+  };
+
+  const draw = async () => {
+    const list = await FB.listAttachments(bid);
+    const rows = list.map(it => `
+      <tr data-id="${it.id}" data-path="${it.path||''}">
+        <td><a href="${it.url}" target="_blank" rel="noopener">${it.name||''}</a></td>
+        <td>${fmtSize(it.size)}</td>
+        <td>${(it.uploadedAt && (it.uploadedAt.toDate?.() || it.uploadedAt)).toLocaleString?.('ar-OM') || ''}</td>
+        <td>
+          <a class="btn" href="${it.url}" target="_blank" rel="noopener">عرض/تنزيل</a>
+          <button class="btn danger" data-del>حذف</button>
+        </td>
+      </tr>
+    `).join('');
+    document.getElementById('attRows').innerHTML = rows || `
+      <tr><td colspan="4" style="text-align:center;color:#666">لا توجد مرفقات بعد</td></tr>`;
+  };
+
+  // رفع تلقائي عند الاختيار
+  document.getElementById('attUpload').addEventListener('change', async (e)=>{
+    const msg = document.getElementById('attMsg');
+    const files = Array.from(e.target.files||[]);
+    if (!files.length) return;
+    try {
+      msg.textContent = 'جارٍ الرفع…';
+      for (const f of files) { await FB.addAttachment(bid, f); }
+      msg.textContent = '✅ تم الرفع بنجاح';
+      e.target.value = '';
+      await draw();
+    } catch (err) {
+      console.error(err);
+      msg.textContent = '❌ فشل الرفع: ' + (err?.message || err);
+      alert('فشل رفع الملف. تحقق من صلاحيات التخزين أو الإعدادات.');
+    }
+  });
+
+  // حذف
+  document.getElementById('attRows').addEventListener('click', async (e)=>{
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    if (e.target.matches('[data-del]')) {
+      if (UI.confirm('حذف المرفق؟')) {
+        await FB.deleteAttachment(bid, tr.getAttribute('data-id'), tr.getAttribute('data-path')||'');
+        await draw();
+      }
+    }
+  });
+
+  await draw();
+},
+
+    renderReport(){ UI.toast('ميزة التقرير قيد التحسين.'); },
+    openImportCSV(){ UI.toast('استيراد CSV قيد التحسين.'); }
+  };
+
+  function openUpsertBuildingModal(mode, existing){
+    const isEdit = mode === 'edit';
+    const b = existing || {};
+    const counts = b.counts || {apartments:0,shops:0,showrooms:0,basements:0};
+    const bizType = b.bizType || 'إدارة مباني';
+    const feeType = b.feeType || 'percentage';
+    const feeValue = (b.feeValue!=null ? b.feeValue : '');
+    const electricAccount = b.electricAccount || '';
+    const internetNumber = b.internetNumber || '';
+    const guardPhone = b.guardPhone || '';
+    const sewageTruckPhone = b.sewageTruckPhone || '';
+
+    UI.openModal(isEdit? 'تعديل المبنى' : 'إضافة مبنى', `
+      <div class="grid cols-2">
+        <div>
+          <label>نوع العمل</label>
+          <select id="mbBizType">
+            <option value="إدارة مباني" ${bizType==='إدارة مباني'?'selected':''}>إدارة مباني</option>
+            <option value="جمعية الملاك" ${bizType==='جمعية الملاك'?'selected':''}>جمعية الملاك</option>
+          </select>
+        </div>
+        <div>
+          <label>طريقة الأجرة</label>
+          <select id="mbFeeType">
+            <option value="percentage" ${feeType==='percentage'?'selected':''}>نسبة</option>
+            <option value="salary" ${feeType==='salary'?'selected':''}>راتب</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1">
+          <label id="mbFeeLabel">${feeType==='salary'?'الراتب الشهري (ر.ع)':'النسبة (%)'}</label>
+          <input id="mbFeeValue" type="number" inputmode="decimal" step="0.01" value="${feeValue}" placeholder="${feeType==='salary'?'مثال: 150 (ر.ع)':'مثال: 15 (٪)'}">
+        </div>
+        <div style="grid-column:1/-1"><label>اسم المبنى</label><input id="mbName" value="${b.name||''}" placeholder="مثال: مبنى السيفة"></div>
+        <div><label>الموقع</label><input id="mbLocation" value="${b.location||''}" placeholder="مثال: ولاية صور - السيفة"></div>
+        <div><label>رقم التواصل</label><input id="mbContact" inputmode="tel" value="${b.contact||''}" placeholder="9xxxxxxx"></div>
+        <div style="grid-column:1/-1"><label>المالك</label><input id="mbOwner" value="${b.owner||''}" placeholder="اسم المالك"></div>
+        <div style="grid-column:1/-1"><label>ملاحظات</label><textarea id="mbNotes" rows="2" placeholder="تفاصيل إضافية">${b.notes||''}</textarea></div>
+
+        <div><label>عدد الشقق</label><input id="mbApt" type="number" min="0" value="${Number(counts.apartments||0)}"></div>
+        <div><label>عدد المحلات</label><input id="mbShop" type="number" min="0" value="${Number(counts.shops||0)}"></div>
+        <div><label>عدد المعارض</label><input id="mbShow" type="number" min="0" value="${Number(counts.showrooms||0)}"></div>
+        <div><label>عدد القبو</label><input id="mbBase" type="number" min="0" value="${Number(counts.basements||0)}"></div>
+
+        <div><label>رقم حساب الكهرباء</label><input id="mbElectric" value="${electricAccount}" placeholder="رقم الحساب"></div>
+        <div><label>رقم انترنت البناية</label><input id="mbInternet" value="${internetNumber}" placeholder="رقم الاشتراك/الحساب"></div>
+        <div><label>رقم حارس البناية</label><input id="mbGuard" value="${guardPhone}" placeholder="هاتف الحارس"></div>
+        <div><label>رقم سائق ناقلة المجاري</label><input id="mbSewage" value="${sewageTruckPhone}" placeholder="هاتف السائق"></div>
+      </div>
+      <div class="buttons-row">
+        <button type="button" class="btn primary" id="saveB">${isEdit?'💾 حفظ التعديل':'حفظ المبنى'}</button>
+      </div>
+    `);
+
+    // Bank field for Owners Association
+    (function(){
+      const sel = document.getElementById('mbBizType');
+      if(!sel) return;
+      const grid = sel.closest('.grid') || sel.closest('[style*="grid"]') || (document.querySelector('.grid.cols-2'));
+      let holder = document.getElementById('oaBankHolder');
+      if(!holder){
+        holder = document.createElement('div');
+        holder.id = 'oaBankHolder';
+        holder.style.gridColumn = '1 / -1';
+        holder.innerHTML = '<label id="oaBankWrap" style="display:none">الحساب البنكي للجمعية'
+          + '<input id="oaBank" value="'+(b.oaBank||'')+'" placeholder="مثال: OMxx xxxx xxxx xxxx" style="width:100%"></label>';
+        (grid||document.body).appendChild(holder);
+      }
+      function apply(){
+        const isOA = ((sel.value||'') === 'جمعية الملاك');
+        const label = document.getElementById('oaBankWrap');
+        if (label) label.style.display = isOA ? 'block' : 'none';
+        if (!isOA) {
+          const inp = document.getElementById('oaBank');
+          if (inp) inp.value = '';
+        }
+      }
+      sel.addEventListener('change', apply);
+      apply();
+    })();
+
+    const feeSel = document.getElementById('mbFeeType');
+    if(feeSel){
+      feeSel.onchange = function(){
+        const isSalary = this.value==='salary';
+        document.getElementById('mbFeeLabel').textContent = isSalary ? 'الراتب الشهري (ر.ع)' : 'النسبة (%)';
+        const iv = document.getElementById('mbFeeValue');
+        if(iv){ iv.placeholder = isSalary ? 'مثال: 150 (ر.ع)' : 'مثال: 15 (٪)'; }
+      };
+    }
+
+    document.getElementById('saveB').onclick = async ()=>{
+      const payload = {
+        bizType: document.getElementById('mbBizType').value,
+        feeType: document.getElementById('mbFeeType').value,
+        feeValue: Number(document.getElementById('mbFeeValue').value||0),
+        name: (document.getElementById('mbName').value||'').trim(),
+        location: (document.getElementById('mbLocation').value||'').trim(),
+        contact: (document.getElementById('mbContact').value||'').trim(),
+        owner: (document.getElementById('mbOwner').value||'').trim(),
+        notes: (document.getElementById('mbNotes').value||'').trim(),
+        counts: {
+          apartments: Number(document.getElementById('mbApt').value||0),
+          shops: Number(document.getElementById('mbShop').value||0),
+          showrooms: Number(document.getElementById('mbShow').value||0),
+          basements: Number(document.getElementById('mbBase').value||0),
+        },
+        electricAccount: (document.getElementById('mbElectric').value||'').trim(),
+        internetNumber: (document.getElementById('mbInternet').value||'').trim(),
+        guardPhone: (document.getElementById('mbGuard').value||'').trim(),
+        sewageTruckPhone: (document.getElementById('mbSewage').value||'').trim(),
+        oaBank: (document.getElementById('oaBank')?.value||'').trim(),
+      };
+
+      if(!payload.name){ UI.toast('أدخل اسم المبنى'); return; }
+
+      if(isEdit){
+        const id = (b && b.id) || State.activeBuildingId;
+        await FB.updateBuilding(id, payload);
+      }else{
+        await FB.createBuilding(Object.assign({createdAt: new Date().toISOString()}, payload));
+      }
+      UI.closeModal();
+      Render.dashboard();
+      if(State.activeBuildingId) Render.building();
+    };
+  }
+
+  function bindHeader(){ document.getElementById('btnAddBuilding').onclick = ()=> Actions.openAddBuilding(); }
+
+  return { State, FB, UI, Render, Actions, utils:{ $, $$, todayIso, ymKey } };
+})();
+window.App = App; // ← حتى يقدر سكربت التقرير يصل لـ App و FB
+
+function labelKind(kind){ return kind==='apartment'?'شقة':(kind==='shop'?'محل':(kind==='showroom'?'معرض':'قبو')); }
+
+(function init(){
+  document.getElementById('btnAddBuilding').onclick = ()=> App.Actions.openAddBuilding();
+  App.Render.populateYM();
+  App.Render.dashboard();
+})();
+
+
+</script>
+
+<!-- ========================= إصدار عقد (تلقائي + طباعة) ========================= -->
+<script>
+(function(){
+  const LOGO_URL  = "https://i.ibb.co/C3rc2mkL/file-00000000637c62308240e62f076360cc.png";
+  const STAMP_URL = "https://i.ibb.co/VWRwKDXy/signature.png";
+
+  // فتح نافذة إنشاء العقد
+  window.openContract = function openContract(t){
+    // حاول نقرأ من الزر/السطر تلقائياً إذا ما وصلتنا قيم
+    function autoFromDOM(){
+      try{
+        const btn = document.activeElement?.closest?.('[data-contract]');
+        const row = btn?.closest?.('[data-tenant-row], .tenant-row');
+        const read = sel => row?.querySelector(sel)?.textContent.trim();
+        return {
+          tenantName : btn?.dataset.tenantName || read('[data-tenant-name]') || '',
+          unitNumber : btn?.dataset.unit       || read('[data-unit]')        || '',
+          rent       : parseFloat(btn?.dataset.rent || (read('[data-rent]')||'').replace(/[^\d.]/g,'')) || 0,
+          kind       : btn?.dataset.kind       || row?.getAttribute('data-kind') || '',
+          phone      : btn?.dataset.phone      || read('[data-phone]') || '',
+          idNumber   : btn?.dataset.id         || read('[data-id]')    || '',
+          payDate    : btn?.dataset.paydate    || ''
+        };
+      }catch{ return {}; }
+    }
+    t = Object.assign(autoFromDOM(), t||{});
+
+    const buildingName = (document.getElementById('buildingTitle')?.textContent || '').trim();
+    const today  = new Date().toISOString().slice(0,10);
+    const startD = today;
+    const endD   = new Date(new Date().setFullYear(new Date().getFullYear()+1)).toISOString().slice(0,10);
+    const payD   = t.payDate || today;
+    const rentOMR= Number(t.rent||0).toFixed(3);
+
+    // اغلِق أي نافذة قديمة
+    document.getElementById('ctOverlay')?.remove();
+
+    // الغطاء + الصندوق
+    const overlay = document.createElement('div');
+    overlay.id = 'ctOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;z-index:9999';
+    document.body.appendChild(overlay);
+
+    const box = document.createElement('div');
+    box.style.cssText = 'direction:rtl;background:#fff;width:min(980px,96%);border-radius:16px;overflow:hidden;font-family:Tajawal,system-ui,sans-serif;color:#111';
+    box.innerHTML = `
+      <div style="padding:20px;border-bottom:1px solid #e5e7eb;background:#f8fafc">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-weight:800;font-size:22px">مشاريع مدينة الإبداع المتميزة لإدارة الممتلكات العقارية</div>
+            <div style="color:#6b7280">عقد الإيجار</div>
+          </div>
+          <img src="${LOGO_URL}" alt="" style="height:48px" onerror="this.style.display='none'">
+        </div>
+      </div>
+
+      <div style="padding:22px 20px">
+        <div class="grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label>تاريخ تحرير العقد<input id="ctDate" type="date" value="${today}" style="width:100%"></label>
+          <label>الوحدة<input id="ctUnit" value="${(t.unitNumber||'')}" style="width:100%"></label>
+
+          <label>اسم المستأجر<input id="ctTenant" value="${(t.tenantName||'')}" style="width:100%"></label>
+          <label>رقم البطاقة الشخصية<input id="ctId" value="${(t.idNumber||'')}" style="width:100%"></label>
+
+          <label>الإيجار الشهري (ر.ع)<input id="ctRent" type="number" step="0.001" value="${rentOMR}" style="width:100%"></label>
+          <label>تاريخ دفع الإيجار<input id="ctPayDate" type="date" value="${payD}" style="width:100%"></label>
+
+          <label>بداية العقد<input id="ctStart" type="date" value="${startD}" style="width:100%"></label>
+          <label>تاريخ الانتهاء<input id="ctEnd" type="date" value="${endD}" style="width:100%"></label>
+
+          <label>رقم الهاتف<input id="ctPhone" value="${(t.phone||'')}" style="width:100%"></label>
+          <label>مقر العمل<input id="ctWork" value="مسقط" style="width:100%"></label>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+          <button id="ctPrint" class="btn" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">🖨️ طباعة العقد</button>
+          <button id="ctClose" class="btn" style="background:#f3f4f6;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">إغلاق</button>
+        </div>
+      </div>
+    `;
+    overlay.appendChild(box);
+
+    box.querySelector('#ctClose').onclick = ()=> overlay.remove();
+
+    box.querySelector('#ctPrint').onclick = function(){
+      const data = {
+        logo: LOGO_URL,
+        stamp: STAMP_URL,
+        building: buildingName,
+        date:   box.querySelector('#ctDate').value || today,
+        unit:   box.querySelector('#ctUnit').value || t.unitNumber || '',
+        tenant: box.querySelector('#ctTenant').value || t.tenantName || '',
+        id:     box.querySelector('#ctId').value || '',
+        rent:   Number(box.querySelector('#ctRent').value || t.rent || 0).toFixed(3),
+        payday: box.querySelector('#ctPayDate').value || payD,
+        start:  box.querySelector('#ctStart').value || startD,
+        end:    box.querySelector('#ctEnd').value || endD,
+        phone:  box.querySelector('#ctPhone').value || '',
+        work:   box.querySelector('#ctWork').value || 'مسقط',
+      };
+
+      const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>عقد الإيجار - Lease Agreement</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background: #fff; color: #111; }
+    .contract {
+      width: 100%;
+      max-width: 170mm;
+      margin: 0 auto;
+      border: 1.5px solid #222;
+      border-radius: 12px;
+      padding: 10mm;
+      font-family: "Tajawal","Segoe UI",Tahoma,Arial,sans-serif;
+      line-height: 1.9;
+    }
+    .header { display: grid; grid-template-columns: 1fr 120px 1fr; align-items: start; gap: 10px; margin-bottom: 8mm; }
+    .header .right { text-align: right; line-height: 1.6; font-size: 13.5px; direction: rtl; white-space: pre-line; font-weight: 700; }
+    .header .left  { text-align: left;  line-height: 1.6; font-size: 13.5px; direction: ltr; white-space: pre-line; font-family: "Poppins","Segoe UI",Tahoma,Arial,sans-serif; font-weight: 600; }
+    .header .logo  { display: flex; align-items: center; justify-content: center; height: 100%; }
+    .header .logo img { max-width: 110px; max-height: 110px; object-fit: contain; }
+    .title-wrap { text-align: center; margin-bottom: 8mm; }
+    .title-frame {
+      display: inline-block;
+      border: 2px solid #111;
+      border-radius: 12px;
+      padding: 4mm 6mm;
+      text-align: center;
+    }
+    .title-frame .ar { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: .2px; }
+    .title-frame .en { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: .2px; }
+    .title-frame hr { border: none; border-top: 1px solid #111; margin: 2.5mm 0; }
+    .meta { font-size: 13px; color: #444; margin-bottom: 6mm; display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+    .meta b { color: #111; }
+    .sec  { margin-top: 6mm; font-size: 14px; color: #111; }
+    .clause{ margin: 8px 0; }
+    .signs{ display:flex; gap:28px; margin-top: 16mm; }
+    .sign { flex:1; border:1px dashed #cbd5e1; border-radius:12px; padding:12px; }
+    .stamp{ height:70px; object-fit:contain; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="contract">
+    <div class="header">
+      <div class="right">
+مشاريع مدينة الإبداع المتميزة
+س.ت: 1294875
+سلطنة عمان
+هاتف: 90929600
+      </div>
+      <div class="logo">
+        <img src="${data.logo}" alt="Logo">
+      </div>
+      <div class="left">
+Mashare'a Madinat AlEbda'a Almtamayeza
+CR No.: 1294875
+Sultanate of Oman
+Tel: 90929600
+      </div>
+    </div>
+
+    <div class="title-wrap">
+      <div class="title-frame">
+        <p class="ar">عقد الإيجار</p>
+        <hr>
+        <p class="en">Lease Agreement</p>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div>المبنى: <b>${data.building || '—'}</b></div>
+      <div>الوحدة: <b>${data.unit || '—'}</b></div>
+      <div>تاريخ تحرير العقد: <b>${data.date}</b></div>
+      <div>تاريخ الانتهاء: <b>${data.end}</b></div>
+    </div>
+
+    <div class="sec">
+      <div>أبرم هذا العقد بتاريخ: <b>${data.date}</b></div>
+      <div class="clause">بين كلا من:</div>
+      <div>الطرف الأول: الأفاضل/ <b>مشاريع مدينة الإبداع المتميزة</b></div>
+      <div>الطرف الثاني (المستأجر): الفاضل / <b>${data.tenant || '__________'}</b></div>
+      <div>بطاقة شخصية رقم / <b>${data.id || '—'}</b></div>
+      <div>قيمة الإيجار الشهري / <b>${data.rent}</b> ر.ع &nbsp;&nbsp; تاريخ دفع الإيجار: <b>${data.payday}</b></div>
+      <div>بداية العقد بتاريخ: <b>${data.start}</b> &nbsp;&nbsp; تاريخ الإنتهاء: <b>${data.end}</b></div>
+      <div>رقم الهاتف: <b>${data.phone || '—'}</b> &nbsp;&nbsp; مقر العمل: <b>${data.work}</b></div>
+
+      <div class="clause" style="margin-top:12px"><b>تمهيد</b></div>
+      <div>
+        حيث أن الفاضل (المالك) لمبنى قام بالتعاقد مع مشاريع مدينة الإبداع المتميزة لتقديم الخدمات المشتركة للمستأجرين نيابة عنه في المبنى. 
+        وحيث أن العقد بين الفاضل المالك ومشاريع مدينة الإبداع المتميزة يتضمن بنداً يلزم مؤسسة مشاريع مدينة الإبداع المتميزة بتوقيع عقود مباشرة مع المستأجرين في المبنى،
+        وبناءً عليه قد أبرم هذا العقد بين الطرفين وتم الاتفاق على ما يلي:
+      </div>
+
+      <div class="clause"><b>البند الأول:</b> يلتزم الطرف الثاني دفع مبلغ الإيجار الشهري التزاماً رئيسياً لا تأخير أو تأجيل فيه، في محل القانون.</div>
+      <div class="clause"><b>البند الثاني:</b> يلتزم الطرف الثاني بدفع قيمة الإيجار الشهري بداية كل شهر بنظام شيكات تودع في البنك مباشرة.</div>
+      <div class="clause"><b>البند الثالث:</b> يلتزم الطرف الثاني بدفع فواتير الماء والكهرباء خلال فترة أقصاها 10 أيام من تاريخ استلام الفاتورة من الطرف الأول.</div>
+      <div class="clause"><b>البند الرابع:</b> في حالة إخلال الطرف الثاني في سداد مبلغ الإيجار الشهري، يحق لمشاريع مدينة الإبداع المتميزة قطع الماء والكهرباء وإجبار المستأجر على إخلاء الشقة تماماً في فترة أقصاها 10 أيام.</div>
+      <div class="clause"><b>البند الخامس:</b> يلتزم الطرف الثاني بإبلاغ الطرف الأول في حالة الرغبة في فسخ عقد الإيجار في فترة لا تقل عن 30 يوماً من تاريخ الفسخ.</div>
+      <div class="clause"><b>البند السادس:</b> يلتزم الطرف الثاني بإصدار شيك ضمان مقدماً عند توقيع العقد وقدره (<b>${data.rent}</b>) ريالاً عمانياً للصيانة العامة داخل الشقة بعد انتهاء العقد أو فسخه من (طلاء الجدران، صيانة النوافذ الزجاجية، صيانة الأبواب الخشبية والألمنيوم أو أي تلف جسيم داخل الشقة). وفي حالة أن المستأجر هو الذي يتحمل الصيانة سيتم إرجاع شيك الضمان للمستأجر.</div>
+      <div class="clause"><b>البند السابع:</b> يحق للطرف الأول إصدار الإنذارات والمخالفات في حالة تعدي الطرف الثاني على المرافق العامة للمبنى أو إساءة استخدامها.</div>
+      <div class="clause"><b>البند الثامن:</b> يبقى هذا العقد ساري المفعول طالما بقي العقد الموقع بين الفاضل (المالك) ومشاريع مدينة الإبداع المتميزة ساري المفعول، وفي حالة إنهاء ذلك يلتزم الطرف الأول بإبلاغ الطرف الثاني بذلك وبتاريخ توقفه عن تقديم الخدمات قبل 30 يوماً على الأقل.</div>
+      <div class="clause"><b>البند التاسع:</b> في حالة نشوء أي خلاف بين الطرفين ناتج أو مرتبط بهذا العقد ولم يتم حله ودياً فيمكن إحالة الخلاف إلى المحاكم المختصة في سلطنة عمان للفصل فيه.</div>
+
+      <div class="signs">
+        <div class="sign">
+          <div><b>توقيع الطرف الأول:</b></div>
+          <div>الأفاضل / مشاريع مدينة الإبداع المتميزة</div>
+          <div>التوقيع: سعود بن جمال بن أحمد المعولي</div>
+          <div style="margin-top:8px">الختم:</div>
+          <img src="${data.stamp}" class="stamp" onerror="this.style.display='none'">
+        </div>
+        <div class="sign">
+          <div><b>توقيع الطرف الثاني:</b></div>
+          <div>الفاضل: ${data.tenant || '__________'}</div>
+          <div>التوقيع: __________________</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="noprint" style="text-align:center;margin:16px 0">
+    <button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">طباعة</button>
+  </div>
+</body>
+</html>`;
+
+      const w = window.open('', '_blank');
+      w.document.write(html);
+      w.document.close();
+      setTimeout(()=>w.print(), 120);
+      overlay.remove();
+    };
+  };
+
+  // تفويض عام لزر [data-contract]
+  document.addEventListener('click', function(ev){
+    const b = ev.target.closest?.('[data-contract]');
+    if(!b) return;
+    ev.stopPropagation();
+    ev.stopImmediatePropagation?.();
+    openContract({
+      tenantName: b.dataset.tenantName || '',
+      unitNumber: b.dataset.unit || '',
+      rent: parseFloat(b.dataset.rent||'0') || 0,
+      kind: b.dataset.kind || '',
+      phone: b.dataset.phone || '',
+      idNumber: b.dataset.id || '',
+      payDate: b.dataset.paydate || ''
+    });
+  }, {capture:true});
+})();
+</script>
+
+<!-- ========================= إصدار إيصال (سند قبض) — جاهز للطباعة ========================= -->
+
+
+<script>
+(function(){
+  const LOGO_URL  = "https://i.ibb.co/C3rc2mkL/file-00000000637c62308240e62f076360cc.png";
+  const STAMP_URL = "https://i.ibb.co/VWRwKDXy/signature.png";
+
+  // كتابة المبلغ بالحروف (ريال عماني) — للأعداد الصحيحة
+  function amountWordsAR(n){
+    n = Math.floor(Math.abs(Number(n)||0));
+    if(n===0) return 'صفر';
+    const ones = ['','واحد','اثنان','ثلاثة','أربعة','خمسة','ستة','سبعة','ثمانية','تسعة'];
+    const teens = ['عشرة','أحد عشر','اثنا عشر','ثلاثة عشر','أربعة عشر','خمسة عشر','ستة عشر','سبعة عشر','ثمانية عشر','تسعة عشر'];
+    const tens = ['','عشرة','عشرون','ثلاثون','أربعون','خمسون','ستون','سبعون','ثمانون','تسعون'];
+    const hundreds = ['','مائة','مائتان','ثلاثمائة','أربعمائة','خمسمائة','ستمائة','سبعمائة','ثمانمائة','تسعمائة'];
+    function underThousand(x){
+      let s = '', h = Math.floor(x/100), t = Math.floor((x%100)/10), o = x%10;
+      if(h) s += hundreds[h];
+      if(t>1){
+        if(s) s+=' و ';
+        s += (o ? (ones[o] + ' و ' + tens[t]) : tens[t]);
+      } else if(t===1){
+        if(s) s+=' و ';
+        s += teens[o];
+      } else if(o){
+        if(s) s+=' و ';
+        s += (o===1?'واحد':o===2?'اثنان':ones[o]);
+      }
+      return s;
+    }
+    const thousands = Math.floor(n/1000), rest = n%1000;
+    let res = '';
+    if(thousands){
+      if(thousands===1) res = 'ألف';
+      else if(thousands===2) res = 'ألفان';
+      else if(thousands>=3 && thousands<=10) res = underThousand(thousands) + ' آلاف';
+      else res = underThousand(thousands) + ' ألف';
+    }
+    if(rest){
+      if(res) res += ' و ';
+      res += underThousand(rest);
+    }
+    return res;
+  }
+
+  function genRcNo(){
+    const d = new Date();
+    const YY = String(d.getFullYear()).slice(-2);
+    const MM = String(d.getMonth()+1).padStart(2,'0');
+    const DD = String(d.getDate()).padStart(2,'0');
+    const rnd = Math.floor(1000 + Math.random()*9000);
+    return YY+MM+DD+String(rnd);
+  }
+
+  // يفتح نافذة إدخال ثم يطبع الإيصال
+  window.openReceipt = function openReceipt(t){
+    t = t || {};
+    // قراءة افتراضية من الصف/الزر لو استدعينا بدون معاملات
+    function autoFromDOM(){
+      try{
+        const btn = document.activeElement?.closest?.('[data-receipt]');
+        const row = btn?.closest?.('[data-tenant-row], .tenant-row');
+        const read = sel => row?.querySelector(sel)?.textContent.trim();
+        return {
+          tenantName : btn?.dataset.tenantName || read?.('[data-tenant-name]') || '',
+          unitNumber : btn?.dataset.unit       || read?.('[data-unit]')        || '',
+          rent       : parseFloat(btn?.dataset.rent || (read?.('[data-rent]')||'').replace(/[^\d.]/g,'')) || 0,
+          kind       : btn?.dataset.kind       || row?.getAttribute('data-kind') || '',
+          phone      : btn?.dataset.phone      || read?.('[data-phone]') || '',
+          idNumber   : btn?.dataset.id         || read?.('[data-id]')    || '',
+          payDate    : btn?.dataset.paydate    || ''
+        };
+      }catch{ return {}; }
+    }
+    t = Object.assign(autoFromDOM(), t || {});
+
+    const buildingName = (document.getElementById('buildingTitle')?.textContent || '').trim();
+    const today = new Date().toISOString().slice(0,10); // YYYY-MM-DD
+    const payer = (t.tenantName || '').trim();
+    const unit  = (t.tenantUnit || t.unitNumber || '').toString();
+    const kind  = (typeof window.labelKind==='function' ? labelKind(t.kind) : (t.kind||''));
+    const amountNum = Number(t.rent || t.amount || 0);
+    const amount = amountNum.toFixed(3);
+    const noteDefault = (kind ? (kind + ' ') : '') + (unit ? ('رقم ' + unit) : '');
+
+    // إزالة أي نافذة قديمة
+    document.getElementById('rcOverlay')?.remove();
+
+    // الـ Overlay + صندوق الإدخال
+    const overlay = document.createElement('div');
+    overlay.id = 'rcOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;z-index:9999';
+    document.body.appendChild(overlay);
+
+    const box = document.createElement('div');
+    box.style.cssText = 'direction:rtl;background:#fff;width:min(920px,96%);border-radius:16px;overflow:hidden;font-family:Tajawal,system-ui,sans-serif;color:#111';
+    box.innerHTML = `
+      <div style="padding:20px;border-bottom:1px solid #e5e7eb;background:#f8fafc">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div>
+            <div style="font-weight:800;font-size:22px">مشاريع مدينة الإبداع المتميزة لإدارة الممتلكات العقارية</div>
+            <div style="color:#6b7280">(Receipt Voucher) سند قبض</div>
+          </div>
+          <img src="${LOGO_URL}" alt="" style="height:48px" onerror="this.style.display='none'">
+        </div>
+        <div style="display:flex;gap:24px;margin-top:14px;font-weight:600">
+          <div>رقم السند: <input id="rcNo" style="border:0;border-bottom:1px solid #cbd5e1;outline:0;padding:0 4px;width:140px" value="${genRcNo()}"></div>
+          <div>التاريخ: <input id="rcDate" type="date" style="border:0;border-bottom:1px solid #cbd5e1;outline:0;padding:0 4px" value="${today}"></div>
+        </div>
+      </div>
+
+      <div style="padding:22px 20px">
+        <div style="display:grid;grid-template-columns:220px 1fr;row-gap:16px;column-gap:14px;align-items:center">
+          <div style="color:#6b7280">استلمنا من الفاضل:</div>
+          <div><input id="rcPayer" value="${payer}" style="width:100%;border:0;border-bottom:1px dashed #cbd5e1;outline:0;padding:6px 4px"></div>
+
+          <div style="color:#6b7280">مبلغ وقدره:</div>
+          <div><input id="rcAmountWords" value="${amountWordsAR(amountNum)} ريال عماني" style="width:100%;border:0;border-bottom:1px dashed #cbd5e1;outline:0;padding:6px 4px"></div>
+
+          <div style="color:#6b7280">(بالأرقام)</div>
+          <div>رع <input id="rcAmount" type="number" step="0.001" value="${amount}" style="width:200px;border:0;border-bottom:1px dashed #cbd5e1;outline:0;padding:6px 4px"></div>
+
+          <div style="color:#6b7280">طريقة الدفع:</div>
+          <div style="border:1px solid #cbd5e1;border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:14px">
+            <label><input type="radio" name="rcPayMethod" value="cash" checked> نقدًا</label>
+            <label><input type="radio" name="rcPayMethod" value="cheque"> شيك رقم</label>
+            <label><input type="radio" name="rcPayMethod" value="transfer"> تحويل بنكي رقم</label>
+            <span id="rcPayNumWrap" style="display:none;margin-inline-start:10px;display:inline-flex;align-items:center;gap:8px">
+              <input id="rcPayNum" placeholder="—" style="width:220px;border:1px solid #cbd5e1;border-radius:10px;padding:6px 10px">
+            </span>
+          </div>
+
+          <div style="color:#6b7280">بتاريخ:</div>
+          <div><input id="rcPaidOn" type="date" value="${today}" style="border:0;border-bottom:1px dashed #cbd5e1;outline:0;padding:6px 4px"></div>
+
+          <div style="color:#6b7280">وذلك عن:</div>
+          <div><input id="rcFor" value="${(kind||'إيجار')} ${noteDefault}" style="width:100%;border:0;border-bottom:1px dashed #cbd5e1;outline:0;padding:6px 4px"></div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;margin-top:26px">
+          <div style="border-top:1px solid #e5e7eb;width:52%"></div>
+        </div>
+        <div style="text-align:left;font-weight:700;margin-top:10px">توقيع المستلم</div>
+      </div>
+
+      <div style="padding:16px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-start">
+        <button id="rcPrint" class="btn" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">🖨️ طباعة</button>
+        <button id="rcClose" class="btn" style="margin-inline-start:10px;background:#f3f4f6;color:#111;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">إغلاق</button>
+      </div>
+    `;
+    overlay.appendChild(box);
+
+    function updatePayUI(){
+      const method = box.querySelector('input[name=rcPayMethod]:checked')?.value;
+      const wrap = box.querySelector('#rcPayNumWrap');
+      const inp  = box.querySelector('#rcPayNum');
+      if(method==='cash'){ wrap.style.display='none'; if(inp) inp.value=''; }
+      else {
+        wrap.style.display='inline-flex';
+        if(inp) inp.placeholder = (method==='cheque'?'رقم الشيك':'رقم التحويل البنكي');
+      }
+    }
+    box.querySelectorAll('input[name=rcPayMethod]').forEach(el => el.addEventListener('change', updatePayUI));
+    updatePayUI();
+
+    box.querySelector('#rcClose').onclick = () => overlay.remove();
+    box.querySelector('#rcAmount').addEventListener('input', e=>{
+      box.querySelector('#rcAmountWords').value = amountWordsAR(e.target.value) + ' ريال عماني';
+    });
+
+    // الطباعة
+    box.querySelector('#rcPrint').onclick = function(){
+      const data = {
+        building  : buildingName,
+        rcNo      : box.querySelector('#rcNo').value || genRcNo(),
+        dateHeader: box.querySelector('#rcDate').value || today,
+        payer     : box.querySelector('#rcPayer').value || '',
+        amount    : Number(box.querySelector('#rcAmount').value || 0).toFixed(3),
+        amountWords: (box.querySelector('#rcAmountWords').value || '').trim(),
+        payMethod : box.querySelector('input[name=rcPayMethod]:checked')?.value || 'cash',
+        payNum    : box.querySelector('#rcPayNum')?.value || '',
+        paidOn    : box.querySelector('#rcPaidOn').value || today,
+        theFor    : box.querySelector('#rcFor').value || '',
+        unit      : unit,
+        kindLabel : kind
+      };
+
+      const payRow = (data.payMethod==='cash') ? '' : `
+        <tr><th>${data.payMethod==='cheque'?'رقم الشيك':'رقم التحويل البنكي'}</th><td>${data.payNum || '—'}</td></tr>
+      `;
+
+      const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>سند قبض - Receipt Voucher</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+
+<style>
+  @page { size: A4; margin: 10mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: #fff; color: #111; }
+  .receipt {
+    width: 100%;
+    max-width: 170mm;
+    margin: 0 auto;
+    border: 1.5px solid #222;
+    border-radius: 12px;
+    padding: 10mm;
+    font-family: "Tajawal","Segoe UI",Tahoma,Arial,sans-serif;
+    line-height: 1.8;
+  }
+  .header { display: grid; grid-template-columns: 1fr 120px 1fr; align-items: start; gap: 10px; margin-bottom: 8mm; }
+  .header .right{ text-align:right; line-height:1.6; font-size:13.5px; direction:rtl; white-space:pre-line; font-weight:700 }
+  .header .left { text-align:left;  line-height:1.6; font-size:13.5px; direction:ltr; white-space:pre-line; font-family:"Poppins","Segoe UI",Tahoma,Arial,sans-serif; font-weight:600 }
+  .header .logo{ display:flex;align-items:center;justify-content:center; height:100% }
+  .header .logo img{ max-width:110px; max-height:110px; object-fit:contain }
+  .title-wrap { text-align:center; margin-bottom: 8mm; }
+  .title-frame {
+    display:inline-block; border:2px solid #111; border-radius:12px;
+    padding:4mm 6mm; text-align:center;
+  }
+  .title-frame .ar { font-size:22px; font-weight:800; margin:0; letter-spacing:.2px }
+  .title-frame .en { font-size:14px; font-weight:700; margin:0; letter-spacing:.2px }
+  .title-frame hr { border:none; border-top:1px solid #111; margin:2.5mm 0 }
+  .meta { font-size:13px; color:#444; margin-bottom:6mm; display:grid; grid-template-columns:1fr 1fr; gap:6mm }
+  .meta div b { color:#111 }
+  table{ width:100%; border-collapse:collapse }
+  th,td{ border:1px solid #000; padding:8px; font-size:13.5px; text-align:right }
+  th{ white-space:nowrap }
+  .sign{ margin-top:14mm; display:flex; flex-direction:column; align-items:center; gap:14mm }
+  .sig-block{ display:flex; flex-direction:column; align-items:center }
+  .sig-block .label{ font-weight:800; margin-bottom:6px }
+  .sig-block img{ height:70px; width:auto; object-fit:contain }
+  .sig-block .line{ border-top:1px solid #111; width:60%; height:0; margin-top:8mm }
+  @media print{ body{ padding:0 } }
+</style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="header">
+      <div class="right">
+مشاريع مدينة الإبداع المتميزة
+س.ت: 1294875
+سلطنة عمان
+هاتف: 90929600
+      </div>
+      <div class="logo"><img src="${LOGO_URL}" alt="Logo"></div>
+      <div class="left">
+Mashare'a Madinat AlEbda'a Almtamayeza
+CR No.: 1294875
+Sultanate of Oman
+Tel: 90929600
+      </div>
+    </div>
+
+    <div class="title-wrap">
+      <div class="title-frame">
+        <p class="ar">سند قبض</p>
+        <hr>
+        <p class="en">Receipt Voucher</p>
+      </div>
+    </div>
+
+    <div class="meta">
+      <div>المبنى: <b>${data.building || '—'}</b></div>
+      <div>الوحدة: <b>${data.unit || '—'}</b> (${data.kindLabel || '—'})</div>
+      <div>رقم الإيصال: <b>${data.rcNo}</b></div>
+      <div>التاريخ: <b>${data.dateHeader}</b></div>
+    </div>
+
+    <table>
+      <tr><th>استلمنا من الفاضل</th><td>${data.payer || '—'}</td></tr>
+      <tr><th>مبلغ وقدره</th><td>${data.amountWords || (amountWordsAR(data.amount) + ' ريال عماني')}</td></tr>
+      <tr><th>(بالأرقام)</th><td>رع ${data.amount}</td></tr>
+      <tr><th>طريقة الدفع</th><td>${data.payMethod==='cheque'?'شيك':(data.payMethod==='transfer'?'تحويل بنكي':'نقدًا')}</td></tr>
+      ${payRow}
+      <tr><th>بتاريخ</th><td>${data.paidOn}</td></tr>
+      <tr><th>وذلك عن</th><td>${data.theFor}</td></tr>
+    </table>
+
+    <div class="sign">
+      <div class="sig-block">
+        <div class="label">توقيع المستلم</div>
+        <img src="${STAMP_URL}" alt="signature" onerror="this.style.display='none'">
+        <div class="line"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      const w = window.open('', '_blank');
+      w.document.write(html);
+      w.document.close();
+      setTimeout(()=>{ try{ w.print(); }catch(e){} }, 120);
+      overlay.remove();
+    };
+  };
+
+  // تفويض عام لزر [data-receipt]
+  document.addEventListener('click', function(ev){
+    const b = ev.target.closest?.('[data-receipt]');
+    if(!b) return;
+    ev.stopPropagation();
+    ev.stopImmediatePropagation?.();
+    openReceipt({
+      tenantName: b.dataset.tenantName || '',
+      unitNumber: b.dataset.unit || '',
+      rent: parseFloat(b.dataset.rent||'0') || 0,
+      kind: b.dataset.kind || '',
+      phone: b.dataset.phone || '',
+      idNumber: b.dataset.id || '',
+      payDate: b.dataset.paydate || ''
+    });
+  }, {capture:true});
+})();
+</script>
+<!-- ========================= تقرير المبنى (حساب السماح + بدون دفعة الصالون) ========================= -->
+<script>
+(function () {
+  const ADMIN_PERCENT = 15; // نسبة افتراضية لرسوم الإدارة
+  const LOGO_URL = "https://i.ibb.co/C3rc2mkL/file-00000000637c62308240e62f076360cc.png";
+
+  // أدوات عامة
+  const T = s => (s||"").toString().trim();
+  const H = s => String(s||"")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+
+  // أدوات تاريخية للشهر المحدّد من الواجهة
+  const pad2 = n => String(n).padStart(2,'0');
+  const startOfMonth = (y,m)=> new Date(Date.UTC(y, m-1, 1));
+  const endOfMonth   = (y,m)=> new Date(Date.UTC(y, m, 0, 23,59,59));
+  const monthsSinceStartIncl = (sy, sm, y, m)=> (y*12+m) - (sy*12+sm) + 1;
+
+  // تصنيف نوع الوحدة
+  const kindKey = s => {
+    s = String(s||'').toLowerCase();
+    if (/shop/.test(s) || /محل/.test(s)) return 'shop';
+    if (/showroom/.test(s) || /معرض/.test(s)) return 'showroom';
+    if (/basement/.test(s) || /قبو/.test(s)) return 'basement';
+    return 'apartment';
+  };
+
+  // تنسيق عملة
+  const formatOMR = n => {
+    const x = Number(n||0);
+    return isFinite(x) ? x.toFixed(3) : "0.000";
+  };
+// --- فرز طبيعي يدعم الأرقام العربية + إزالة بادئة نوع الوحدة ---
+
+// يحوّل الأرقام العربية إلى إنجليزية
+function _normalizeDigits(s){
+  return String(s||'').replace(/[\u0660-\u0669\u06F0-\u06F9]/g, d=>{
+    const code = d.charCodeAt(0);
+    const base = (code >= 0x06F0) ? 0x06F0 : 0x0660;
+    return String(code - base);
+  });
+}
+
+// يجزّئ النص لقطع أرقام/حروف لعمل مقارنة طبيعية
+function _naturalKey(val){
+  const s = _normalizeDigits(val||'');
+  const parts = s.match(/\d+|\D+/g) || [];
+  return parts.map(p => (/^\d+$/.test(p) ? parseInt(p,10) : p.trim().toLowerCase()));
+}
+
+// المقارنة الطبيعية بين قيمتين
+function _cmpNatural(a,b){
+  const ka=_naturalKey(a), kb=_naturalKey(b);
+  const n=Math.max(ka.length,kb.length);
+  for(let i=0;i<n;i++){
+    const xa=ka[i], xb=kb[i];
+    if(xa===undefined) return -1;
+    if(xb===undefined) return 1;
+    const na=typeof xa==='number', nb=typeof xb==='number';
+    if(na && nb){ if(xa!==xb) return xa - xb; }
+    else{
+      const sa=String(xa), sb=String(xb);
+      if(sa!==sb) return sa.localeCompare(sb,'ar',{numeric:true,sensitivity:'base'});
+    }
+  }
+  return 0;
+}
+
+// يزيل "الشقة/شقة/المحل/..." من بداية النص لنبقى مع رقم/اسم الوحدة فقط
+function _unitCore(u){
+  return String(u||'').replace(/^\s*(?:الشقة|شقة|المحل|محل|المعرض|معرض|القبو|قبو)\s*/i,'').trim();
+}
+
+  // تحويل نص إلى رقم (يدعم الأرقام العربية ويزيل % والفواصل)
+  function toNum(v){
+    let s = (v ?? '').toString().trim();
+    const map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+    s = s.replace(/[٠-٩]/g, d => map[d] || d);
+    s = s.replace(/[％٪%]/g, '');
+    s = s.replace(/,/g, '.');
+    s = s.replace(/[^0-9.\-]/g, '');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+// يجمع كل الأرقام داخل نص (يدعم الأرقام العربية والكسور)
+// مثال الملاحظة: "80 مقدماً" أو "200 مؤخر" ⇒ 80 / 200
+function sumNumbersInText(txt){
+  if(!txt) return 0;
+  let s = String(txt);
+
+  // طَبّع الأرقام العربية، واستبدل الفاصلة بعلامة عشرية نقطة
+  const map = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+  s = s.replace(/[٠-٩]/g, d => map[d] || d).replace(/,/g, '.');
+
+  // إن وُجدت كلمة "سماح X شهر" لا نحسب رقم الأشهر ضمن المدفوع
+  s = s.replace(/سماح[^0-9\-+]*[-+]?\d+(?:\.\d+)?\s*شهر/gi, '');
+
+  const nums = s.match(/[-+]?\d+(?:\.\d+)?/g) || [];
+  return nums.reduce((acc, v)=> acc + (parseFloat(v)||0), 0);
+}
+
+  // محوّل تاريخ مرن + إخراج نص ISO
+  function toDateAny(v){
+    try{
+      if(!v) return null;
+      if(v instanceof Date) return v;
+      if(typeof v.toDate === 'function') return v.toDate();        // Firestore Timestamp
+      if(typeof v.seconds === 'number') return new Date(v.seconds*1000);
+      if(typeof v === 'number') return new Date(v);
+      if(typeof v === 'string'){
+        const s = v.replace(/\//g,'-').slice(0,10);                // "YYYY/MM/DD" → "YYYY-MM-DD"
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if(m) return new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+        const d2 = new Date(v);
+        if(!isNaN(d2)) return d2;
+      }
+    }catch(e){}
+    return null;
+  }
+  const dateToStr = v => {
+    const d = toDateAny(v);
+    return d ? d.toISOString().slice(0,10) : '';
+  };
+
+  // اكسر رقم الوحدة لسطرين
+  function splitTwoLines(str){
+    const s = String(str||"").replace(/\s+/g,"");
+    if (!s) return "";
+    if (s.length <= 4) return H(s);
+    const mid = Math.ceil(s.length/2);
+    return H(s.slice(0, mid)) + "<br>" + H(s.slice(mid));
+  }
+
+  // 1) المصروفات للشهر المختار
+  async function loadExpensesForCurrentMonth(){
+    try{
+      const bid = window.App?.State?.activeBuildingId;
+      const y   = Number(window.App?.State?.selYear);
+      const m   = Number(window.App?.State?.selMonth);
+      if(!bid || !y || !m || !window.App?.FB?.listExpenses) return {list:[], total:0};
+
+      const listAll = await window.App.FB.listExpenses(bid);
+      const ms = startOfMonth(y,m), me = endOfMonth(y,m);
+
+      const inMonth = listAll.filter(e=>{
+        if (e.year != null && e.month != null) return Number(e.year)===y && Number(e.month)===m;
+        if (e.ym) return String(e.ym).slice(0,7) === `${y}-${pad2(m)}`;
+        const d = toDateAny(e.date);
+        return d && d >= ms && d <= me;
+      });
+
+      const total = inMonth.reduce((s,e)=> s + (Number(e.amount)||0), 0);
+      return {list: inMonth, total};
+    }catch{ return {list:[], total:0}; }
+  }
+
+  // 2) صفوف المستأجرين
+  async function buildRows(){
+    const y = Number(window.App?.State?.selYear);
+    const m = Number(window.App?.State?.selMonth);
+    const ym = `${y}-${pad2(m)}`;
+    const ms = startOfMonth(y,m), me = endOfMonth(y,m);
+    const bid = window.App?.State?.activeBuildingId;
+
+    if(!window.App?.FB?.listTenants || !bid){
+      const container = document.getElementById("tenantsList") || document;
+      const rows = [];
+      container.querySelectorAll("#tenantsList [data-tenant-row], .tenant-row, tr[data-unit], tr.unit-row, .row-tenant").forEach(row=>{
+        const ds = row.dataset || {};
+        rows.push({
+          unit  : ds.unit || ds.unitNumber || "",
+          tenant: ds.tenantName || ds.tenant || "",
+          id    : ds.id || "",
+          rent  : Number(String(ds.rent||"").replace(/[^\d.]/g,""))||0,
+          phone : ds.phone || "",
+          start : ds.start || "",
+          end   : ds.end || "",
+          notes : ds.notes || "",
+          kind  : kindKey(ds.kind || row.getAttribute('data-kind') || ""),
+          inGrace:false
+        });
+      });
+      return rows;
+    }
+
+    const tenants = await window.App.FB.listTenants(bid);
+    return tenants.filter(t=>{
+      const sd = t.startDate ? new Date(t.startDate) : new Date(0);
+      const ed = t.endDate   ? new Date(t.endDate)   : new Date('9999-12-31');
+      return sd <= me && ed >= ms;
+    }).map(t=>{
+      const sd = t.startDate ? new Date(t.startDate) : new Date();
+      const mSince = monthsSinceStartIncl(sd.getUTCFullYear(), sd.getUTCMonth()+1, y, m);
+      const graceEnabled = !!t.graceEnabled;
+      const graceMonths  = Number(t.graceMonths||0);
+      const inGrace = graceEnabled && graceMonths >= mSince;
+      const payNote = (t.payments && t.payments[ym]) ? t.payments[ym] : '';
+      const graceNote = graceEnabled ? `سماح ${graceMonths} شهر${inGrace ? ' (غير محسوب)' : ''}` : '';
+      const combinedNote = [payNote, graceNote, (t.notes||'')].filter(Boolean).join(' • ');
+      return {
+        unit  : t.unitNumber || '',
+        tenant: t.tenantName || '',
+        id    : t.nationalId || '',
+        rent  : Number(t.rent||0)||0,
+        phone : t.phone || '',
+        start : (t.startDate||'').slice(0,10),
+        end   : (t.endDate||'').slice(0,10),
+        notes : combinedNote,
+        kind  : kindKey(t.kind),
+        inGrace
+      };
+    });
+  }
+
+  // 3) جداول HTML
+function tableHTML(title, unitHeader, list){
+  if (!list.length) return "";
+
+  // فرز تصاعدي حسب رقم/اسم الوحدة، ثم حسب اسم المستأجر
+  const sorted = [...list].sort((a,b)=>{
+    const c = _cmpNatural(_unitCore(a.unit), _unitCore(b.unit));
+    if (c) return c;
+    return String(a.tenant||'').localeCompare(String(b.tenant||''), 'ar', {numeric:true, sensitivity:'base'});
+  });
+
+  return `
+    <h2 class="sec-title">${H(title)}</h2>
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col style="width:8%">
+          <col style="width:18%">
+          <col style="width:16%">
+          <col style="width:8%">
+          <col style="width:12%">
+          <col style="width:11%">
+          <col style="width:11%">
+          <col style="width:16%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>${H(unitHeader)}</th>
+            <th>المستأجر</th>
+            <th>البطاقة الشخصية</th>
+            <th>الإيجار</th>
+            <th>رقم الهاتف</th>
+            <th>بداية العقد</th>
+            <th>نهاية العقد</th>
+            <th>ملاحظات الدفع</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map(r=>`
+            <tr>
+              <td class="split2">${splitTwoLines(r.unit)}</td>
+              <td class="wrap">${H(r.tenant)}</td>
+              <td class="big-id nowrap">${H(r.id)}</td>
+              <td>${formatOMR(r.rent)}</td>
+              <td class="wrap">${H(r.phone)}</td>
+              <td>${H(r.start)}</td>
+              <td>${H(r.end)}</td>
+              <td class="wrap small-notes">${H(r.notes)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+
+  function expensesTableHTML(exps){
+    if(!exps.length) return "";
+    return `
+      <h2 class="sec-title">جدول المصروفات</h2>
+      <div class="table-wrap">
+        <table>
+          <colgroup>
+            <col style="width:28%"><col style="width:14%"><col style="width:16%"><col style="width:42%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>نوع المصروف</th>
+              <th>المبلغ (ر.ع)</th>
+              <th>التاريخ</th>
+              <th>ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${exps.map(e=>`
+              <tr>
+                <td class="wrap">${H(e.type||'')}</td>
+                <td>${formatOMR(e.amount)}</td>
+                <td>${H(dateToStr(e.date) || e.ym || (e.year && e.month ? (e.year+'-'+pad2(e.month)) : ''))}</td>
+                <td class="wrap small-notes">${H(e.notes||'')}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // 4) بناء وطباعة التقرير
+  async function printReport(ctx){
+    const allRows = await buildRows();
+
+    const groups = {
+      apartment: allRows.filter(r => r.kind==='apartment'),
+      shop     : allRows.filter(r => r.kind==='shop'),
+      showroom : allRows.filter(r => r.kind==='showroom'),
+      basement : allRows.filter(r => r.kind==='basement'),
+    };
+
+    const sum = list => list.reduce((s,r)=> s + (r.inGrace ? 0 : (Number(r.rent||0)||0)), 0);
+    const tA = sum(groups.apartment);
+    const tS = sum(groups.shop);
+    const tR = sum(groups.showroom);
+    const tB = sum(groups.basement);
+
+    const exp = await loadExpensesForCurrentMonth();
+    const invoicesTotal = exp.total;
+
+    const coreTotal = tA + tS;
+let paidTotal = 0;
+try {
+  const y  = Number(window.App?.State?.selYear);
+  const m  = Number(window.App?.State?.selMonth);
+  const ym = `${y}-${String(m).padStart(2,'0')}`;
+
+  const bid = window.App?.State?.activeBuildingId;
+  if (bid && window.App?.FB?.listTenants) {
+    const tenantsRaw = await window.App.FB.listTenants(bid);
+    for (const t of tenantsRaw) {
+      const note = t?.payments?.[ym];
+      if (note) paidTotal += sumNumbersInText(note);
+    }
+  } else {
+    // نسخة احتياطية (من DOM): قد تحتوي "سماح 2 شهر" لذلك أزلناها في الدالة
+    document.querySelectorAll('#tenantsList [data-tenant-row]').forEach(row=>{
+      const note = row.dataset?.notes || '';
+      if (note) paidTotal += sumNumbersInText(note);
+    });
+  }
+} catch(e){ /* تجاهل */ }
+    // إعدادات رسوم الإدارة
+    let feeType  = ctx.feeType  || 'percentage';
+    let feeValue = (ctx.feeValue != null ? ctx.feeValue : '');
+    let fv = toNum(feeValue);
+
+    if (!(fv > 0)) {
+      try {
+        const bid = window.App?.State?.activeBuildingId;
+        if (bid) {
+          const ref = await firebase.firestore().collection('buildings').doc(bid).get();
+          const b = ref.exists ? (ref.data() || {}) : {};
+          feeType  = b.feeType  || feeType;
+          feeValue = (b.feeValue != null ? b.feeValue : feeValue);
+          fv = toNum(feeValue);
+        }
+      } catch(e){}
+    }
+
+    let adminFee = 0, adminLabel = '';
+    if (feeType === 'salary' && (fv > 0)) {
+      adminFee = fv;
+      adminLabel = 'رسوم الإدارة (راتب ثابت)';
+    } else if (fv > 0) {
+      adminFee = coreTotal * (fv / 100);
+      adminLabel = `نسبة رسوم الإدارة ${fv}%`;
+    } else {
+      adminFee = coreTotal * (ADMIN_PERCENT/100);
+      adminLabel = `نسبة رسوم الإدارة ${ADMIN_PERCENT}%`;
+    }
+
+    const netTotal = coreTotal - adminFee - invoicesTotal;
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>تقرير المبنى</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;700&family=Tajawal:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 10mm; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#fff;color:#111}
+  .page-frame{ position:relative; width:100%; max-width:190mm; margin:0 auto; padding:8mm 6mm 6mm; }
+  .page-frame::before{ content:""; position:absolute; inset:0; border:2px solid #000; border-radius:12px; pointer-events:none; }
+  .report{ width:100%; max-width:190mm; margin:0 auto; padding:0; font-family:"Tajawal","Segoe UI",Tahoma,Arial,sans-serif; line-height:1.8; }
+  .header{display:grid;grid-template-columns:1fr 120px 1fr;align-items:start;gap:10px;margin:0 0 8mm}
+  .header .right{ text-align:right; line-height:1.6; font-size:13.5px; direction:rtl; white-space:pre-line; font-weight:700 }
+  .header .left{  text-align:left;  line-height:1.6; font-size:13.5px; direction:ltr; white-space:pre-line; font-family:"Poppins","Segoe UI",Tahoma,Arial,sans-serif; font-weight:600 }
+  .header .logo{ display:flex;align-items:center;justify-content:center }
+  .header .logo img{ max-width:110px; max-height:110px; object-fit:contain }
+  .meta{ font-size:12.5px; color:#444; margin:0 0 6mm; display:grid; grid-template-columns:1fr 1fr; gap:6mm }
+  .meta b{ color:#111 }
+  .sec-title{ font-weight:800; margin:7mm 0 5mm; text-align:center; font-size:16px }
+  .table-wrap{ border:1px solid #000; border-radius:10px; overflow:hidden; }
+  table{ width:100%; border-collapse:collapse; table-layout:fixed; }
+  th,td{ border:1px solid #000; padding:6px 7px; font-size:12.5px; line-height:1.35; vertical-align:top; text-align:right; }
+  th{ background:#f8fafc; white-space:nowrap; }
+  td.wrap{ white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
+  td.split2{ white-space:normal; line-height:1.3; font-family:monospace; text-align:center; }
+  td.big-id{ font-size:15px; }
+  td.nowrap{ white-space:nowrap; word-break:keep-all; overflow-wrap:normal; }
+  td.small-notes{ font-size:11px; }
+  .totals{ margin-top:8mm; border:1px solid #111; border-radius:10px; padding:10px 12px; font-size:13.5px; }
+  .totals .row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .accounts{ margin-top:6mm; border:1px solid #111; border-radius:10px; padding:10px 12px; font-size:14px; }
+  .accounts .item{ display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+  .accounts .item .lbl{ font-weight:700 }
+  .footer{ margin-top:6mm; margin-bottom: 10mm; font-size:11.5px; color:#555; text-align:center; white-space:pre-line }
+  @media print{ body{padding:0} }
+</style>
+</head>
+<body>
+  <div class="page-frame">
+    <div class="report">
+      <div class="header">
+        <div class="right">
+مشاريع مدينة الإبداع المتميزة
+س.ت: 1294875
+سلطنة عمان
+هاتف: 90929600
+        </div>
+        <div class="logo"><img src="${LOGO_URL}" alt="Logo"></div>
+        <div class="left">
+Mashare'a Madinat AlEbda'a Almtamayeza
+CR No.: 1294875
+Sultanate of Oman
+Tel: 90929600
+        </div>
+      </div>
+
+      <div class="meta">
+        <div>اسم المبنى: <b>${H(ctx.building||'')}</b></div>
+        <div>الموقع: <b>${H(ctx.location||'')}</b></div>
+        <div>رقم التواصل: <b>${H(ctx.phone||'')}</b></div>
+        <div>المالك: <b>${H(ctx.owner||'')}</b></div>
+        <div style="grid-column:1/-1">نوع العمل: <b>${H(ctx.workType||'')}</b></div>
+      </div>
+
+      ${tableHTML('الشقق', ' الشقة', groups.apartment)}
+      ${tableHTML('المحلات', ' المحل', groups.shop)}
+      ${tableHTML('المعارض', ' المعرض', groups.showroom)}
+      ${tableHTML('القبو', ' القبو', groups.basement)}
+
+      <div class="totals">
+        <div class="row">
+          <div>عدد الشقق: <b>${groups.apartment.length}</b></div>
+          <div>مجموع إيجارات الشقق (بعد استبعاد السماح): <b>${formatOMR(tA)}</b> ر.ع</div>
+        </div>
+        <div class="row">
+          <div>عدد المحلات: <b>${groups.shop.length}</b></div>
+          <div>مجموع إيجارات المحلات (بعد استبعاد السماح): <b>${formatOMR(tS)}</b> ر.ع</div>
+        </div>
+        <div class="row">
+          <div>عدد المعارض: <b>${groups.showroom.length}</b></div>
+          <div>مجموع إيجارات المعارض (بعد استبعاد السماح): <b>${formatOMR(tR)}</b> ر.ع</div>
+        </div>
+        <div class="row">
+          <div>عدد القبو: <b>${groups.basement.length}</b></div>
+          <div>مجموع إيجارات القبو (بعد استبعاد السماح): <b>${formatOMR(tB)}</b> ر.ع</div>
+        </div>
+      </div>
+
+      <div class="accounts">
+        <div class="item"><span class="lbl">الحسابات النهائية</span><span></span></div>
+        <div class="item"><span>مجموع إيجار الشقق</span><b>${formatOMR(tA)} ر.ع</b></div>
+        <div class="item"><span>مجموع إيجار المحلات</span><b>${formatOMR(tS)} ر.ع</b></div>
+        <div class="item"><span>الإيجار الكلي (شقق + محلات)</span><b>${formatOMR(coreTotal)} ر.ع</b></div>
+        <div class="item"><span>${adminLabel}</span><b>${formatOMR(adminFee)} ر.ع</b></div>
+             <div class="item"><span>مجموع الإيجار المدفوع</span><b>${formatOMR(paidTotal)} ر.ع</b></div>
+        <div class="item"><span>المصروفات</span><b>${formatOMR(invoicesTotal)} ر.ع</b></div>
+        <div class="item" style="border-top:1px dashed #aaa; margin-top:6px; padding-top:8px">
+          <span class="lbl">مجموع الإيجار بعد خصم الفواتير ورسوم الإدارة</span>
+          <b>${formatOMR(netTotal)} ر.ع</b>
+        </div>
+      </div>
+
+      ${expensesTableHTML(exp.list)}
+
+      <div class="footer">
+ص.ب:138، الرمز البريدي: 323، سلطنة عمان — هاتف: 90929600
+P.O. Box: 138, Postal Code: 323, Sultanate of Oman — GSM: 90929600
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const w = window.open("", "_blank");
+    w.document.write(html); w.document.close();
+    setTimeout(()=>w.print(), 120);
+  }
+
+  // 5) دالة عامة لاستدعاء التقرير
+  window.openBuildingReport = async function(t){
+    t = t || {};
+    const ctx  = {
+      building: t.name     || T(document.getElementById("buildingTitle")?.textContent),
+      location: t.location || '',
+      phone   : t.phone    || '',
+      owner   : t.owner    || '',
+      workType: t.workType || '',
+      feeType : t.feeType  || undefined,
+      feeValue: t.feeValue || undefined
+    };
+    await printReport(ctx);
+  };
+})();
+</script>
+
+
+</body>
+</html>
