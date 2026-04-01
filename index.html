@@ -455,9 +455,45 @@ const isActiveDuring = (s, e, ms, me) => {
     updateBuilding: async(id,patch)=> { await (window.__waitAuth||Promise.resolve()); return db.collection('buildings').doc(id).update(patch) },
     removeBuilding: async(id)=> { await (window.__waitAuth||Promise.resolve()); return db.collection('buildings').doc(id).delete() },
     listTenants: async(bid)=> { await (window.__waitAuth||Promise.resolve()); const snap = await db.collection('buildings').doc(bid).collection('tenants').get(); return snap.docs.map(d=>({id:d.id, ...d.data()})); },
+    getTenant: async(bid,id)=> { await (window.__waitAuth||Promise.resolve()); const doc = await db.collection('buildings').doc(bid).collection('tenants').doc(id).get(); return doc.exists ? { id: doc.id, ...doc.data() } : null; },
     addTenant: async(bid,data)=> { await (window.__waitAuth||Promise.resolve()); return (await db.collection('buildings').doc(bid).collection('tenants').add(data)).id },
     updateTenant: async(bid,id,patch)=> db.collection('buildings').doc(bid).collection('tenants').doc(id).update(patch),
     deleteTenant: async(bid,id)=> db.collection('buildings').doc(bid).collection('tenants').doc(id).delete(),
+    listPaymentHistory: async(bid,tid,inlineRows=[])=> {
+      await (window.__waitAuth||Promise.resolve());
+      let subRows = [];
+      try{
+        if(tid){
+          const snap = await db.collection('buildings').doc(bid).collection('tenants').doc(tid).collection('paymentHistory').orderBy('paymentDate','asc').get();
+          subRows = snap.docs.map(d=>({id:d.id, ...d.data()}));
+        }
+      }catch(e){
+        console.warn('listPaymentHistory warning:', e);
+        subRows = [];
+      }
+      const localRows = Array.isArray(inlineRows) ? inlineRows.map((row,idx)=>({
+        id: row?.id || ('inline-' + idx + '-' + String(row?.paymentDate || '')),
+        ...row
+      })) : [];
+      const merged = [...subRows, ...localRows];
+      const seen = new Set();
+      return merged.filter(row=>{
+        const key = String(
+          row?.id ||
+          [row?.paymentDate || '', row?.amount || '', row?.receiptNo || '', row?.note || ''].join('|')
+        );
+        if(seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).sort((a,b)=> String(a?.paymentDate || '').localeCompare(String(b?.paymentDate || '')));
+    },
+    addPaymentHistory: async(bid,tid,data)=> {
+      await (window.__waitAuth||Promise.resolve());
+      return (await db.collection('buildings').doc(bid).collection('tenants').doc(tid).collection('paymentHistory').add({
+        ...data,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      })).id;
+    },
     listExpenses: async(bid)=> (await db.collection('buildings').doc(bid).collection('expenses').get()).docs.map(d=>({id:d.id, ...d.data()})),
     addExpense: async(bid,data)=> (await db.collection('buildings').doc(bid).collection('expenses').add(data)).id,
     updateExpense: async(bid,id,patch)=> db.collection('buildings').doc(bid).collection('expenses').doc(id).update(patch),
@@ -542,6 +578,108 @@ deleteAttachment: async (bid, docId, path) => {
     }
     return 0;
   };
+
+  function roundMoney(v){ return Math.round((Number(v||0) + Number.EPSILON) * 1000) / 1000; }
+  function money3(v){ return roundMoney(v).toFixed(3); }
+  function toLatinDigitsLocal(v){
+    return String(v ?? '').replace(/[٠-٩۰-۹]/g, d => {
+      const code = d.charCodeAt(0);
+      const base = (code >= 0x06F0) ? 0x06F0 : 0x0660;
+      return String(code - base);
+    });
+  }
+  function parseMoneyLike(v){
+    if (v == null || v === '') return 0;
+    if (typeof v === 'number') return roundMoney(v);
+    const raw = toLatinDigitsLocal(String(v)).replace(/,/g,'.');
+    const cleaned = raw
+      .replace(/(?:ر\.?\s*ع\.?|ريال\s*عماني|omr)/ig, ' ')
+      .replace(/[^0-9+\-.]/g, ' ')
+      .trim();
+    const m = cleaned.match(/[-+]?\d+(?:\.\d+)?/);
+    return m ? roundMoney(parseFloat(m[0]) || 0) : 0;
+  }
+  function extractTaggedMoney(text, label){
+    const s = toLatinDigitsLocal(String(text || '')).replace(/,/g,'.');
+    const re = new RegExp(label + String.raw`\s*[:：]?\s*([-+]?\d+(?:\.\d+)?)`, 'i');
+    const m = s.match(re);
+    return m ? roundMoney(parseFloat(m[1]) || 0) : 0;
+  }
+  function getPaymentRowAmount(row){
+    const directKeys = ['amount','paidAmount','paymentAmount','paid','value'];
+    for (const key of directKeys) {
+      if (row && Object.prototype.hasOwnProperty.call(row, key)) {
+        const val = parseMoneyLike(row[key]);
+        if (val > 0 || String(row[key]).trim() === '0' || String(row[key]).trim() === '0.000') return val;
+      }
+    }
+    const note = String(row?.note || row?.notes || '');
+    return extractTaggedMoney(note, 'مبلغ')
+      || extractTaggedMoney(note, 'المبلغ')
+      || extractTaggedMoney(note, 'المدفوع')
+      || 0;
+  }
+  function extractReceiptNo(text){
+    const s = String(text || '');
+    const m = s.match(/إيصال\s*[:：]?\s*([A-Za-z0-9\-]+)/i);
+    return m ? m[1] : '';
+  }
+  function getLegacyPaymentRowsFromTenant(tenant, year){
+    const out = [];
+    const payments = (tenant && tenant.payments) || {};
+    Object.keys(payments).sort().forEach(key => {
+      if(!/^\d{4}-\d{2}$/.test(String(key))) return;
+      if(Number(String(key).slice(0,4)) !== Number(year)) return;
+      const note = payments[key];
+      const amount = extractTaggedMoney(note, 'مبلغ');
+      if(!(amount > 0)) return;
+      out.push({
+        id: 'legacy-' + key,
+        paymentDate: key + '-01',
+        amount,
+        receiptNo: extractReceiptNo(note),
+        note: String(note || ''),
+        remainingAfter: extractTaggedMoney(note, 'متبقي'),
+        year: Number(year),
+        ym: key,
+        isLegacy: true
+      });
+    });
+    const total = out.reduce((s,row)=> s + (Number(row.amount)||0), 0);
+    return { rows: out, total: roundMoney(total) };
+  }
+  async function getContributionPaymentSummary(bid, tenant, year){
+    const base = Number(tenant?.rent || 0) || 0;
+    const arrears = Number(tenant?.arrearsAmount || 0) || 0;
+    let history = [];
+    try {
+      const inlineHistory = Array.isArray(tenant?.paymentHistory) ? tenant.paymentHistory : [];
+      history = tenant?.id ? await FB.listPaymentHistory(bid, tenant.id, inlineHistory) : inlineHistory;
+    } catch(e){ history = Array.isArray(tenant?.paymentHistory) ? tenant.paymentHistory : []; }
+    const yearNum = Number(year);
+    let rows = history.filter(row => {
+      const rowYear = Number(row?.year || String(row?.paymentDate || '').slice(0,4) || 0);
+      return rowYear === yearNum;
+    }).map(row => ({
+      ...row,
+      amount: getPaymentRowAmount(row),
+      remainingAfter: row.remainingAfter != null ? parseMoneyLike(row.remainingAfter) : (row.remaining != null ? parseMoneyLike(row.remaining) : null),
+      paymentDate: String(row.paymentDate || ''),
+      note: String(row.note || row.notes || ''),
+      receiptNo: String(row.receiptNo || row.receipt || '')
+    }));
+    rows.sort((a,b)=> String(a.paymentDate||'').localeCompare(String(b.paymentDate||'')));
+    let paidTotal = rows.reduce((s,row)=> s + (Number(row.amount)||0), 0);
+    if(!rows.length){
+      const legacy = getLegacyPaymentRowsFromTenant(tenant, yearNum);
+      rows = legacy.rows;
+      paidTotal = legacy.total;
+    }
+    paidTotal = roundMoney(paidTotal);
+    const totalDue = roundMoney(base + arrears);
+    const remaining = roundMoney(totalDue - paidTotal);
+    return { base, arrears, totalDue, paidTotal, remaining, rows };
+  }
 
   const Render = {
     populateYM(){
@@ -849,6 +987,8 @@ function applyFilters(base){
         data-kind="${t.kind||''}"
         data-phone="${t.phone||''}"
         data-id="${t.nationalId||t.id||''}"
+        data-tenant-id="${t.id||''}"
+        data-arrears="${Number(t.arrearsAmount||0)||0}"
         data-paydate="${t.payDate||''}"
         data-idimg="${t.nationalIdImageUrl || ''}"
         data-idimg-path="${t.nationalIdImagePath || ''}">📑 إصدار مستندات</button>`
@@ -914,7 +1054,6 @@ row.querySelector('[data-pay]').onclick = async (ev)=>{
   ev.stopPropagation();
   const ym = ymKey(State.selYear, State.selMonth);
 
-  // مولّد رقم إيصال بنفس صيغة الإيصال (YYMMDD + 4 أرقام)
   function makeRcNo(){
     const d = new Date();
     const YY = String(d.getFullYear()).slice(-2);
@@ -924,7 +1063,206 @@ row.querySelector('[data-pay]').onclick = async (ev)=>{
     return YY+MM+DD+String(rnd);
   }
 
-  UI.openModal(isOA ? 'تسجيل سداد المساهمة' : 'تسجيل دفع الإيجار', `
+  const rent = Number(t.rent||0);
+
+  if (isOA) {
+    const selectedYear = Number(State.selYear);
+    const today = todayIso();
+    const latestTenant = await (FB.getTenant ? FB.getTenant(b.id, t.id) : Promise.resolve(t));
+    const summary = await getContributionPaymentSummary(b.id, latestTenant || t, selectedYear);
+
+    UI.openModal('تسجيل سداد المساهمة', `
+      <div class="grid cols-2">
+        <div>
+          <label>المبلغ المدفوع (ر.ع)</label>
+          <input id="payAmount" type="number" step="0.001" placeholder="0.000">
+        </div>
+        <div>
+          <label>تاريخ السداد</label>
+          <input id="payDate" type="date" value="${today}">
+        </div>
+        <div>
+          <label>رقم الإيصال</label>
+          <input id="payRcNo" placeholder="مثال: ${makeRcNo()}">
+        </div>
+        <div>
+          <label>المتأخرات (ر.ع)</label>
+          <input id="payArrears" type="number" step="0.001" value="${money3(summary.arrears)}">
+        </div>
+
+        <div style="grid-column:1/-1;border:1px solid var(--border);border-radius:12px;padding:12px;background:#f8fafc;line-height:1.9">
+          <div>المساهمة السنوية لسنة <b>${selectedYear}</b>: <b id="payRent">${money3(summary.base)}</b> ر.ع</div>
+          <div>إجمالي المدفوع حتى الآن: <b id="payPrevPaid">${money3(summary.paidTotal)}</b> ر.ع</div>
+          <div>إجمالي المطلوب: <b id="payTotalDue">${money3(summary.totalDue)}</b> ر.ع</div>
+          <div>المتبقي بعد هذا الإدخال: <b id="payRemain">${money3(summary.remaining)}</b> ر.ع</div>
+        </div>
+
+        <div style="grid-column:1/-1">
+          <label>ملاحظات السداد</label>
+          <textarea id="payNote" rows="3" placeholder="تفاصيل إضافية (اختياري)"></textarea>
+        </div>
+
+        <div style="grid-column:1/-1">
+          <label>سجل المدفوعات المسجل</label>
+          <div id="payHistoryBox" style="border:1px solid var(--border);border-radius:12px;overflow:auto;max-height:220px;background:#fff"></div>
+        </div>
+      </div>
+
+      <div class="buttons-row">
+        <button type="button" class="btn" id="btnIssueReceipt">🧾 إصدار إيصال</button>
+        <button type="button" class="btn primary" id="savePay">حفظ</button>
+      </div>
+    `);
+
+    const amtEl = document.getElementById('payAmount');
+    const arrearsEl = document.getElementById('payArrears');
+    const rcEl = document.getElementById('payRcNo');
+    rcEl.value = makeRcNo();
+
+    function renderHistoryTable(rows){
+      const box = document.getElementById('payHistoryBox');
+      if (!box) return;
+      if (!rows.length) {
+        box.innerHTML = `<div class="muted" style="padding:12px">لا يوجد سجل مدفوعات مسجل لهذه السنة.</div>`;
+        return;
+      }
+      box.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ</th>
+              <th>المبلغ</th>
+              <th>رقم الإيصال</th>
+              <th>المتبقي</th>
+              <th>ملاحظات</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row=>`
+              <tr>
+                <td>${row.paymentDate || '—'}</td>
+                <td>${money3(getPaymentRowAmount(row))}</td>
+                <td>${row.receiptNo || '—'}</td>
+                <td>${row.remainingAfter != null ? money3(row.remainingAfter) : '—'}</td>
+                <td>${String(row.note || '').replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m] || m))}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    renderHistoryTable(summary.rows);
+
+    function refreshRemain(){
+      const paidNow = Number(amtEl.value || 0) || 0;
+      const arrearsNow = Number(arrearsEl.value || 0) || 0;
+      const totalDue = roundMoney(rent + arrearsNow);
+      const remain = roundMoney(totalDue - summary.paidTotal - paidNow);
+      document.getElementById('payTotalDue').textContent = money3(totalDue);
+      document.getElementById('payRemain').textContent = money3(remain);
+    }
+    amtEl.addEventListener('input', refreshRemain);
+    arrearsEl.addEventListener('input', refreshRemain);
+    refreshRemain();
+
+    document.getElementById('btnIssueReceipt').onclick = ()=>{
+      const paid = Number(document.getElementById('payAmount').value||0);
+      const rc   = (document.getElementById('payRcNo').value||'').trim() || makeRcNo();
+      openReceipt({
+        tenantName: t.tenantName || '',
+        unitNumber: t.unitNumber || '',
+        rent: paid || rent,
+        kind: t.kind || '',
+        phone: t.phone || '',
+        idNumber: t.nationalId || ''
+      });
+      setTimeout(()=>{
+        const no = document.getElementById('rcNo');
+        if(no) no.value = rc;
+        const amt = document.getElementById('rcAmount');
+        if(amt){ amt.value = (paid||rent).toFixed(3); amt.dispatchEvent(new Event('input')); }
+        const rcFor = document.getElementById('rcFor');
+        if(rcFor){ rcFor.value = `مساهمة سنة ${selectedYear} للوحدة ${t.unitNumber||''}`.trim(); }
+      }, 60);
+    };
+
+    document.getElementById('savePay').onclick = async ()=>{
+      const btn = document.getElementById('savePay');
+      const oldText = btn ? btn.textContent : 'حفظ';
+      try{
+        if(btn){
+          btn.disabled = true;
+          btn.textContent = 'جارٍ الحفظ...';
+        }
+
+        const paid = roundMoney(Number(document.getElementById('payAmount').value||0));
+        const paymentDate = (document.getElementById('payDate').value || today).trim();
+        const rc = (document.getElementById('payRcNo').value||'').trim() || makeRcNo();
+        const arrears = roundMoney(Number(document.getElementById('payArrears').value||0));
+        const extra = (document.getElementById('payNote').value||'').trim();
+
+        if(!(paid > 0) && arrears === summary.arrears){
+          UI.toast('أدخل مبلغ السداد أو غيّر مبلغ المتأخرات أولاً');
+          return;
+        }
+
+        const freshTenant = await (FB.getTenant ? FB.getTenant(b.id, t.id) : Promise.resolve(t));
+        const paymentYear = Number(String(paymentDate||'').slice(0,4) || selectedYear);
+        const paymentYm = String(paymentDate || '').slice(0,7) || ym;
+        const freshSummary = await getContributionPaymentSummary(b.id, freshTenant || t, paymentYear);
+        const totalDueNow = roundMoney(rent + arrears);
+        const remainingAfter = roundMoney(totalDueNow - freshSummary.paidTotal - paid);
+
+        const patch = {
+          arrearsAmount: arrears
+        };
+
+        if (paid > 0) {
+          const historyEntry = {
+            id: 'ph_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
+            ownerName: t.tenantName || '',
+            unitNumber: t.unitNumber || '',
+            amount: paid,
+            receiptNo: rc,
+            paymentDate,
+            year: paymentYear,
+            ym: paymentYm,
+            note: extra,
+            contributionAmount: rent,
+            arrearsAmount: arrears,
+            totalDue: totalDueNow,
+            remainingAfter,
+            bizType: 'جمعية الملاك'
+          };
+          patch.paymentHistory = firebase.firestore.FieldValue.arrayUnion(historyEntry);
+          patch['payments.' + paymentYm] = `إجمالي المدفوع: ${money3(freshSummary.paidTotal + paid)} | المتبقي: ${money3(remainingAfter)} | المتأخرات: ${money3(arrears)}`;
+          await FB.updateTenant(b.id, t.id, patch);
+
+          try{
+            await FB.addPaymentHistory(b.id, t.id, historyEntry);
+          }catch(e){
+            console.warn('paymentHistory subcollection warning:', e);
+          }
+        } else {
+          patch['payments.' + paymentYm] = `إجمالي المدفوع: ${money3(freshSummary.paidTotal)} | المتبقي: ${money3(roundMoney(totalDueNow - freshSummary.paidTotal))} | المتأخرات: ${money3(arrears)}`;
+          await FB.updateTenant(b.id, t.id, patch);
+        }
+
+        UI.closeModal();
+        await Render.building();
+      }catch(err){
+        console.error('فشل حفظ سداد المساهمة:', err);
+        UI.toast('تعذّر الحفظ: ' + (err?.message || err));
+      }finally{
+        if(btn){
+          btn.disabled = false;
+          btn.textContent = oldText;
+        }
+      }
+    };
+    return;
+  }
+
+  UI.openModal('تسجيل دفع الإيجار', `
     <div class="grid cols-2">
       <div>
         <label>المبلغ المدفوع (ر.ع)</label>
@@ -936,7 +1274,7 @@ row.querySelector('[data-pay]').onclick = async (ev)=>{
       </div>
 
       <div style="grid-column:1/-1" class="muted">
-        ${contributionLabelByBiz(isOA ? 'جمعية الملاك' : 'إدارة مباني', 'short')}: <b id="payRent">0.000</b> ر.ع —
+        ${contributionLabelByBiz('إدارة مباني', 'short')}: <b id="payRent">0.000</b> ر.ع —
         المتبقي: <b id="payRemain">0.000</b> ر.ع
       </div>
 
@@ -952,14 +1290,11 @@ row.querySelector('[data-pay]').onclick = async (ev)=>{
     </div>
   `);
 
-  // قيم مبدئية
-  const rent = Number(t.rent||0);
   const rentStr = rent.toFixed(3);
   document.getElementById('payRent').textContent = rentStr;
   document.getElementById('payRemain').textContent = rentStr;
   document.getElementById('payRcNo').value = makeRcNo();
 
-  // لو فيه ملاحظة قديمة، نعبيها ونحاول نستخرج المبلغ/الرقم إن وُجدوا
   try{
     const tdoc = await firebase.firestore()
       .collection('buildings').doc(b.id)
@@ -978,51 +1313,41 @@ row.querySelector('[data-pay]').onclick = async (ev)=>{
     }
   }catch(e){}
 
-  // تحديث المتبقي مباشر
   const amtEl = document.getElementById('payAmount');
   amtEl.addEventListener('input', ()=>{
     const paid = Number(amtEl.value||0);
     document.getElementById('payRemain').textContent = (rent - paid).toFixed(3);
   });
 
-  // إصدار إيصال بنفس الرقم والمبلغ
   document.getElementById('btnIssueReceipt').onclick = ()=>{
     const paid = Number(document.getElementById('payAmount').value||0);
     const rc   = (document.getElementById('payRcNo').value||'').trim() || makeRcNo();
-
-    // افتح الإيصال بالقيم الأساسية
     openReceipt({
       tenantName: t.tenantName || '',
       unitNumber: t.unitNumber || '',
-      rent:       paid || rent,     // نمرر المبلغ المدفوع
+      rent:       paid || rent,
       kind:       t.kind || '',
       phone:      t.phone || '',
       idNumber:   t.nationalId || ''
     });
-
-    // ثم نطبّق نفس الرقم/المبلغ داخل نافذة الإيصال المفتوحة
     setTimeout(()=>{
       const no = document.getElementById('rcNo');
       if(no) no.value = rc;
-
       const amt = document.getElementById('rcAmount');
       if(amt){ amt.value = (paid||rent).toFixed(3); amt.dispatchEvent(new Event('input')); }
-
       const rcFor = document.getElementById('rcFor');
-      if(rcFor){ rcFor.value = `${isOA ? 'مساهمة سنوية' : 'إيجار'} ${ym} للوحدة ${t.unitNumber||''}`.trim(); }
+      if(rcFor){ rcFor.value = `إيجار ${ym} للوحدة ${t.unitNumber||''}`.trim(); }
     }, 60);
   };
 
-  // حفظ
   document.getElementById('savePay').onclick = async ()=>{
     const paid   = Number(document.getElementById('payAmount').value||0);
     const rc     = (document.getElementById('payRcNo').value||'').trim();
     const remain = (rent - paid).toFixed(3);
     const extra  = (document.getElementById('payNote').value||'').trim();
 
-    // نخزّنها كنص موحّد في payments[ym] للحفاظ على التوافق مع الواجهة
     const summary =
-      `إيصال: ${rc||'—'} | مبلغ: ${paid.toFixed(3)} | ${isOA ? 'مساهمة' : 'إيجار'}: ${rent.toFixed(3)} | متبقي: ${remain}` +
+      `إيصال: ${rc||'—'} | مبلغ: ${paid.toFixed(3)} | إيجار: ${rent.toFixed(3)} | متبقي: ${remain}` +
       (extra ? ` | ملاحظة: ${extra}` : '');
 
     const field = {}; field['payments.'+ym] = summary;
@@ -1283,6 +1608,11 @@ if (ownerDocsBtn) ownerDocsBtn.onclick = async (ev)=>{
     phone: t.phone || '',
     ownerIdNumber: t.nationalId || '',
     idNumber: t.nationalId || '',
+    tenantId: t.id || '',
+    buildingId: b.id || '',
+    arrearsAmount: Number(t.arrearsAmount||0) || 0,
+    payments: t.payments || {},
+    paymentHistory: Array.isArray(t.paymentHistory) ? t.paymentHistory : [],
     payDate: t.payDate || '',
     idimg,
     buildingName: b.name || ''
@@ -1471,6 +1801,7 @@ document.getElementById('tSave').onclick = async ()=>{
       graceEnabled: document.getElementById('tGraceEnabled').checked,
       graceMonths: Number(document.getElementById('tGraceMonths').value||0),
       notes: document.getElementById('tNotes').value.trim(),
+      arrearsAmount: 0,
       payments: {} // ملاحظات الدفع شهرية، ولا تُنقل تلقائيًا
     };
 
@@ -2523,7 +2854,7 @@ openAttachments: async () => {
 
   function bindHeader(){ document.getElementById('btnAddBuilding').onclick = ()=> Actions.openAddBuilding(); }
 
-  return { State, FB, UI, Render, Actions, utils:{ $, $$, todayIso, ymKey } };
+  return { State, FB, UI, Render, Actions, utils:{ $, $$, todayIso, ymKey, getContributionPaymentSummary, getPaymentRowAmount, money3, roundMoney } };
 })();
 window.App = App; // ← حتى يقدر سكربت التقرير يصل لـ App و FB
 
@@ -4506,6 +4837,7 @@ overlay.remove();
     menu.innerHTML = `
       <button type="button" class="btn menu-doc-btn" data-doc-type="contract">📃 إصدار عقد</button>
       <button type="button" class="btn menu-doc-btn" data-doc-type="receipt">🧾 إصدار إيصال</button>
+      <button type="button" class="btn menu-doc-btn" data-doc-type="ledger">📘 سجل مدفوعات</button>
       <button type="button" class="btn menu-doc-btn" data-doc-type="rent">📝 إصدار عدم ممانعة من تأجير</button>
       <button type="button" class="btn menu-doc-btn" data-doc-type="sale">📝 إصدار عدم ممانعة من بيع</button>
     `;
@@ -4540,6 +4872,11 @@ overlay.remove();
       });
     };
 
+    menu.querySelector('[data-doc-type="ledger"]').onclick = ()=>{
+      removeOwnerDocsMenu();
+      openOwnerPaymentLedger(payload);
+    };
+
     menu.querySelector('[data-doc-type="rent"]').onclick = ()=>{
       removeOwnerDocsMenu();
       openOwnerNoObjection(payload, 'rent');
@@ -4551,6 +4888,113 @@ overlay.remove();
     };
 
     setTimeout(()=> document.addEventListener('click', handleOutsideOwnerDocsMenu, true), 0);
+  };
+
+  window.openOwnerPaymentLedger = async function(payload){
+    const bid = payload.buildingId || window.App?.State?.activeBuildingId;
+    const selectedYear = Number(window.App?.State?.selYear) || new Date().getFullYear();
+    const esc = (v)=> String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const money3 = (v)=> {
+      const n = Math.round((Number(v||0) + Number.EPSILON) * 1000) / 1000;
+      return n.toFixed(3);
+    };
+
+    let tenantForSummary = {
+      id: payload.tenantId,
+      rent: payload.rent || 0,
+      arrearsAmount: payload.arrearsAmount || 0,
+      payments: payload.payments || {},
+      paymentHistory: Array.isArray(payload.paymentHistory) ? payload.paymentHistory : []
+    };
+
+    if (bid && payload.tenantId && window.App?.FB?.getTenant) {
+      try {
+        const liveTenant = await window.App.FB.getTenant(bid, payload.tenantId);
+        if (liveTenant) {
+          tenantForSummary = {
+            ...liveTenant,
+            id: liveTenant.id || payload.tenantId,
+            rent: Number(liveTenant.rent ?? payload.rent ?? 0) || 0,
+            arrearsAmount: Number(liveTenant.arrearsAmount ?? payload.arrearsAmount ?? 0) || 0,
+            payments: liveTenant.payments || payload.payments || {},
+            paymentHistory: Array.isArray(liveTenant.paymentHistory) ? liveTenant.paymentHistory : (Array.isArray(payload.paymentHistory) ? payload.paymentHistory : [])
+          };
+        }
+      } catch (e) {
+        console.warn('openOwnerPaymentLedger getTenant warning:', e);
+      }
+    }
+
+    const summary = await (window.App?.utils?.getContributionPaymentSummary
+      ? window.App.utils.getContributionPaymentSummary(bid, tenantForSummary, selectedYear)
+      : Promise.resolve({base:Number(tenantForSummary.rent||0)||0, arrears:Number(tenantForSummary.arrearsAmount||0)||0, totalDue:(Number(tenantForSummary.rent||0)||0)+(Number(tenantForSummary.arrearsAmount||0)||0), paidTotal:0, remaining:(Number(tenantForSummary.rent||0)||0)+(Number(tenantForSummary.arrearsAmount||0)||0), rows:[]}));
+
+    const rowsHtml = summary.rows.length
+      ? summary.rows.map((row, idx)=>`
+          <tr>
+            <td>${idx+1}</td>
+            <td>${esc(row.paymentDate || '—')}</td>
+            <td>${money3(window.App?.utils?.getPaymentRowAmount ? window.App.utils.getPaymentRowAmount(row) : (row.amount || 0))}</td>
+            <td>${esc(row.receiptNo || '—')}</td>
+            <td>${row.remainingAfter != null ? money3(row.remainingAfter) : '—'}</td>
+            <td>${esc(row.note || '')}</td>
+          </tr>`).join('')
+      : `<tr><td colspan="6" style="text-align:center;color:#6b7280">لا يوجد سجل مدفوعات مسجل لهذه السنة.</td></tr>`;
+
+    const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>سجل مدفوعات</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    @page{ size:A4; margin:12mm; }
+    body{ font-family:"Tajawal","Segoe UI",Tahoma,Arial,sans-serif; color:#111; margin:0; background:#fff; }
+    .page{ max-width:190mm; margin:0 auto; }
+    .head{ text-align:center; margin-bottom:12px; }
+    .head h1{ margin:0 0 6px; font-size:24px; }
+    .meta{ display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; margin-bottom:14px; font-size:14px; }
+    .meta div{ padding:6px 8px; border:1px solid #ddd; border-radius:10px; }
+    table{ width:100%; border-collapse:collapse; margin-top:10px; }
+    th,td{ border:1px solid #000; padding:7px 8px; font-size:12.5px; text-align:right; vertical-align:top; }
+    th{ background:#f4f6f8; }
+    .noprint{ text-align:center; margin-top:16px; }
+    @media print{ .noprint{ display:none; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="head">
+      <h1>سجل مدفوعات المساهمة</h1>
+      <div>سنة ${selectedYear}</div>
+    </div>
+    <div class="meta">
+      <div>اسم البناية: <b>${esc(payload.buildingName || '')}</b></div>
+      <div>اسم المالك: <b>${esc(payload.ownerName || '')}</b></div>
+      <div>رقم الوحدة: <b>${esc(payload.unitNumber || '')}</b></div>
+      <div>المساهمة السنوية: <b>${money3(summary.base)} ر.ع</b></div>
+      <div>إجمالي المدفوع: <b>${money3(summary.paidTotal)} ر.ع</b></div>
+      <div>المتبقي: <b>${money3(summary.remaining)} ر.ع</b></div>
+      <div style="grid-column:1/-1">المتأخرات: <b>${money3(summary.arrears)} ر.ع</b></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>التاريخ</th>
+          <th>المبلغ</th>
+          <th>رقم الإيصال</th>
+          <th>المتبقي</th>
+          <th>ملاحظات</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  </div>
+  <div class="noprint"><button onclick="window.print()" style="background:#2563eb;color:#fff;border:none;border-radius:12px;padding:10px 16px;cursor:pointer">طباعة</button></div>
+</body>
+</html>`;
+    writeAndPrint(html);
   };
 
   window.openOwnerNoObjection = function(payload, docType){
@@ -5410,7 +5854,7 @@ function sumNumbersInText(txt){
   }
 
   // 2) صفوف المستأجرين
-  async function buildRows(){
+  async function buildRows(isOA=false){
     const y = Number(window.App?.State?.selYear);
     const m = Number(window.App?.State?.selMonth);
     const ym = `${y}-${pad2(m)}`;
@@ -5432,26 +5876,43 @@ function sumNumbersInText(txt){
           end   : ds.end || "",
           notes : ds.notes || "",
           kind  : kindKey(ds.kind || row.getAttribute('data-kind') || ""),
-          inGrace:false
+          inGrace:false,
+          paidTotal: 0,
+          remaining: 0,
+          arrears: 0
         });
       });
       return rows;
     }
 
     const tenants = await window.App.FB.listTenants(bid);
-    return tenants.filter(t=>{
+    const active = tenants.filter(t=>{
       const sd = t.startDate ? new Date(t.startDate) : new Date(0);
       const ed = t.endDate   ? new Date(t.endDate)   : new Date('9999-12-31');
       return sd <= me && ed >= ms;
-    }).map(t=>{
+    });
+
+    return await Promise.all(active.map(async (t)=>{
       const sd = t.startDate ? new Date(t.startDate) : new Date();
       const mSince = monthsSinceStartIncl(sd.getUTCFullYear(), sd.getUTCMonth()+1, y, m);
       const graceEnabled = !!t.graceEnabled;
       const graceMonths  = Number(t.graceMonths||0);
       const inGrace = graceEnabled && graceMonths >= mSince;
-      const payNote = (t.payments && t.payments[ym]) ? t.payments[ym] : '';
-      const graceNote = graceEnabled ? `سماح ${graceMonths} شهر${inGrace ? ' (غير محسوب)' : ''}` : '';
-      const combinedNote = [payNote, graceNote, (t.notes||'')].filter(Boolean).join(' • ');
+      let paidTotal = 0, remaining = 0, arrears = Number(t.arrearsAmount||0)||0;
+      let combinedNote = '';
+
+      if (isOA && window.App?.utils?.getContributionPaymentSummary) {
+        const summary = await window.App.utils.getContributionPaymentSummary(bid, t, y);
+        paidTotal = Number(summary.paidTotal||0) || 0;
+        remaining = Number(summary.remaining||0) || 0;
+        arrears = Number(summary.arrears||0) || 0;
+        combinedNote = `إجمالي المدفوع: ${formatOMR(paidTotal)} • المتبقي: ${formatOMR(remaining)} • المتأخرات: ${formatOMR(arrears)}`;
+      } else {
+        const payNote = (t.payments && t.payments[ym]) ? t.payments[ym] : '';
+        const graceNote = graceEnabled ? `سماح ${graceMonths} شهر${inGrace ? ' (غير محسوب)' : ''}` : '';
+        combinedNote = [payNote, graceNote, (t.notes||'')].filter(Boolean).join(' • ');
+      }
+
       return {
         unit  : t.unitNumber || '',
         tenant: t.tenantName || '',
@@ -5462,9 +5923,12 @@ function sumNumbersInText(txt){
         end   : (t.endDate||'').slice(0,10),
         notes : combinedNote,
         kind  : kindKey(t.kind),
-        inGrace
+        inGrace,
+        paidTotal,
+        remaining,
+        arrears
       };
-    });
+    }));
   }
 
   // 3) جداول HTML
@@ -5477,6 +5941,41 @@ function tableHTML(title, unitHeader, list, isOA=false){
     if (c) return c;
     return String(a.tenant||'').localeCompare(String(b.tenant||''), 'ar', {numeric:true, sensitivity:'base'});
   });
+
+  if (isOA) {
+    return `
+      <h2 class="sec-title">${H(title)}</h2>
+      <div class="table-wrap">
+        <table>
+          <colgroup>
+            <col style="width:8%">
+            <col style="width:24%">
+            <col style="width:13%">
+            <col style="width:15%">
+            <col style="width:40%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>${H(unitHeader)}</th>
+              <th>المالك</th>
+              <th>المساهمة السنوية</th>
+              <th>رقم الهاتف</th>
+              <th>ملاحظات الدفع</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.map(r=>`
+              <tr>
+                <td class="split2">${splitTwoLines(r.unit)}</td>
+                <td class="wrap">${H(r.tenant)}</td>
+                <td>${formatOMR(r.rent)}</td>
+                <td class="wrap">${H(r.phone)}</td>
+                <td class="wrap small-notes">${H(r.notes)}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }
 
   return `
     <h2 class="sec-title">${H(title)}</h2>
@@ -5495,9 +5994,9 @@ function tableHTML(title, unitHeader, list, isOA=false){
         <thead>
           <tr>
             <th>${H(unitHeader)}</th>
-            <th>${isOA ? 'المالك' : 'المستأجر'}</th>
+            <th>المستأجر</th>
             <th>البطاقة الشخصية</th>
-            <th>${isOA ? 'المساهمة السنوية' : 'الإيجار'}</th>
+            <th>الإيجار</th>
             <th>رقم الهاتف</th>
             <th>بداية العقد</th>
             <th>نهاية العقد</th>
@@ -5555,7 +6054,7 @@ function tableHTML(title, unitHeader, list, isOA=false){
   // 4) بناء وطباعة التقرير
   async function printReport(ctx){
     const isOAReport = isOwnersAssociationBizType(ctx.workType);
-    const allRows = await buildRows();
+    const allRows = await buildRows(isOAReport);
 
     const groups = {
       apartment: allRows.filter(r => r.kind==='apartment'),
@@ -5576,23 +6075,26 @@ function tableHTML(title, unitHeader, list, isOA=false){
     const coreTotal = tA + tS;
 let paidTotal = 0;
 try {
-  const y  = Number(window.App?.State?.selYear);
-  const m  = Number(window.App?.State?.selMonth);
-  const ym = `${y}-${String(m).padStart(2,'0')}`;
-
-  const bid = window.App?.State?.activeBuildingId;
-  if (bid && window.App?.FB?.listTenants) {
-    const tenantsRaw = await window.App.FB.listTenants(bid);
-    for (const t of tenantsRaw) {
-      const note = t?.payments?.[ym];
-      if (note) paidTotal += sumNumbersInText(note);
-    }
+  if (isOAReport) {
+    paidTotal = allRows.reduce((s,row)=> s + (Number(row.paidTotal)||0), 0);
   } else {
-    // نسخة احتياطية (من DOM): قد تحتوي "سماح 2 شهر" لذلك أزلناها في الدالة
-    document.querySelectorAll('#tenantsList [data-tenant-row]').forEach(row=>{
-      const note = row.dataset?.notes || '';
-      if (note) paidTotal += sumNumbersInText(note);
-    });
+    const y  = Number(window.App?.State?.selYear);
+    const m  = Number(window.App?.State?.selMonth);
+    const ym = `${y}-${String(m).padStart(2,'0')}`;
+
+    const bid = window.App?.State?.activeBuildingId;
+    if (bid && window.App?.FB?.listTenants) {
+      const tenantsRaw = await window.App.FB.listTenants(bid);
+      for (const t of tenantsRaw) {
+        const note = t?.payments?.[ym];
+        if (note) paidTotal += sumNumbersInText(note);
+      }
+    } else {
+      document.querySelectorAll('#tenantsList [data-tenant-row]').forEach(row=>{
+        const note = row.dataset?.notes || '';
+        if (note) paidTotal += sumNumbersInText(note);
+      });
+    }
   }
 } catch(e){ /* تجاهل */ }
     // إعدادات رسوم الإدارة
